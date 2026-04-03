@@ -1,5 +1,8 @@
 import { useState, useEffect, useCallback, Fragment } from "react"
-import { Popover, PopoverButton, PopoverPanel, Transition, Disclosure, DisclosureButton, DisclosurePanel } from "@headlessui/react"
+import {
+  Popover, PopoverButton, PopoverPanel, Transition,
+  Disclosure, DisclosureButton, DisclosurePanel,
+} from "@headlessui/react"
 import {
   ChevronDownIcon,
   Bars3Icon,
@@ -7,6 +10,8 @@ import {
   SunIcon,
   MoonIcon,
   ChevronRightIcon,
+  ArrowsPointingOutIcon,
+  ArrowsPointingInIcon,
 } from "@heroicons/react/24/outline"
 import { CATEGORIES } from "./config"
 import { useTheme } from "./ThemeContext"
@@ -28,7 +33,7 @@ function useIsMobile() {
 /* ─────────────────────────────────────────────────────────────────────────────
    Barre de navigation
 ───────────────────────────────────────────────────────────────────────────── */
-function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
+function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark, expanded, setExpanded }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const isMobile = useIsMobile()
 
@@ -61,8 +66,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
           className="flex items-center gap-2.5 h-full pr-5 mr-4 shrink-0 border-0 bg-transparent cursor-pointer"
           style={{ borderRight: "1px solid var(--border)" }}
         >
-          {/* Icône SVG minimaliste à la place de l'emoji */}
-          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
             <circle cx="11" cy="11" r="9.5" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--text)" }}/>
             <path d="M7 11 C7 8.5 9 7 11 7 C13 7 15 8.5 15 11 C15 13.5 13 15 11 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ color: "var(--text)" }}/>
             <circle cx="11" cy="11" r="1.5" fill="currentColor" style={{ color: "var(--text)" }}/>
@@ -83,12 +87,10 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
                 {({ open, close }) => (
                   <>
                     <PopoverButton
-                      className="flex items-center gap-1.5 h-full px-3 text-[13px] font-medium border-0 bg-transparent cursor-pointer outline-none transition-colors duration-150 rounded-none"
+                      className="flex items-center gap-1.5 h-full px-3 text-[13px] border-0 bg-transparent cursor-pointer outline-none transition-colors duration-150 rounded-none"
                       style={{
                         color: categoryId === cat.id ? cat.color : "var(--text)",
-                        borderBottom: categoryId === cat.id
-                          ? `2px solid ${cat.color}`
-                          : "2px solid transparent",
+                        borderBottom: categoryId === cat.id ? `2px solid ${cat.color}` : "2px solid transparent",
                         fontWeight: categoryId === cat.id ? 600 : 500,
                       }}
                       onMouseEnter={e => { if (categoryId !== cat.id) e.currentTarget.style.color = cat.color }}
@@ -96,12 +98,8 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
                     >
                       {cat.label}
                       <ChevronDownIcon
-                        className="w-3.5 h-3.5 transition-transform duration-200"
-                        style={{
-                          transform: open ? "rotate(180deg)" : "rotate(0deg)",
-                          opacity: 0.5,
-                          color: "var(--text)",
-                        }}
+                        className="w-3.5 h-3.5 ml-1 transition-transform duration-200"
+                        style={{ transform: open ? "rotate(180deg)" : "none", opacity: 0.5, color: "var(--text)" }}
                       />
                     </PopoverButton>
 
@@ -122,9 +120,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
                           boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)",
                         }}
                       >
-                        {/* Bande colorée en haut */}
                         <div className="h-0.5 w-full" style={{ background: cat.color }} />
-
                         <div className="py-1.5">
                           {cat.apps.map(app => {
                             const isActive = categoryId === cat.id && appId === app.id
@@ -143,13 +139,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
                                 onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent" }}
                               >
                                 <div>
-                                  <p
-                                    className="text-[13px] leading-snug m-0"
-                                    style={{
-                                      fontWeight: isActive ? 600 : 500,
-                                      color: isActive ? cat.color : "var(--text)",
-                                    }}
-                                  >
+                                  <p className="text-[13px] leading-snug m-0" style={{ fontWeight: isActive ? 600 : 500, color: isActive ? cat.color : "var(--text)" }}>
                                     {app.label}
                                   </p>
                                   {app.description && (
@@ -158,10 +148,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
                                     </p>
                                   )}
                                 </div>
-                                <ChevronRightIcon
-                                  className="w-3.5 h-3.5 shrink-0 ml-2 opacity-0 group-hover:opacity-40 transition-opacity"
-                                  style={{ color: "var(--text)" }}
-                                />
+                                <ChevronRightIcon className="w-3.5 h-3.5 shrink-0 ml-2 opacity-0 group-hover:opacity-40 transition-opacity" style={{ color: "var(--text)" }} />
                               </button>
                             )
                           })}
@@ -175,36 +162,56 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
           </div>
         )}
 
-        {/* Spacer mobile */}
         {isMobile && <div className="flex-1" />}
 
-        {/* ── Bouton dark mode — visible et stylé ── */}
+        {/* ── Bouton expand (desktop seulement) ── */}
+        {!isMobile && (
+          <button
+            onClick={() => setExpanded(e => !e)}
+            aria-label={expanded ? "Réduire la largeur" : "Étendre sur toute la largeur"}
+            title={expanded ? "Réduire la largeur" : "Étendre sur toute la largeur"}
+            className="flex items-center justify-center w-8 h-8 rounded-lg cursor-pointer transition-all duration-200 shrink-0 ml-1"
+            style={{
+              background: expanded ? "var(--bg)" : "transparent",
+              border: `1px solid ${expanded ? "var(--border)" : "transparent"}`,
+              color: "var(--text-muted)",
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.background = "var(--bg)"
+              e.currentTarget.style.borderColor = "var(--border)"
+              e.currentTarget.style.color = "var(--text)"
+            }}
+            onMouseLeave={e => {
+              if (!expanded) {
+                e.currentTarget.style.background = "transparent"
+                e.currentTarget.style.borderColor = "transparent"
+              }
+              e.currentTarget.style.color = "var(--text-muted)"
+            }}
+          >
+            {expanded
+              ? <ArrowsPointingInIcon className="w-4 h-4" />
+              : <ArrowsPointingOutIcon className="w-4 h-4" />
+            }
+          </button>
+        )}
+
+        {/* ── Bouton dark mode ── */}
         <button
           onClick={() => setDark(d => !d)}
           aria-label={dark ? "Passer en mode clair" : "Passer en mode sombre"}
-          className="relative flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer transition-all duration-200 shrink-0 text-[12px] font-semibold"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer transition-all duration-200 shrink-0 text-[12px] font-semibold"
           style={{
-            marginLeft: isMobile ? 8 : 12,
-            background: dark
-              ? "rgba(251,191,36,0.15)"
-              : "rgba(99,102,241,0.10)",
-            border: dark
-              ? "1px solid rgba(251,191,36,0.35)"
-              : "1px solid rgba(99,102,241,0.25)",
+            marginLeft: 8,
+            background: dark ? "rgba(251,191,36,0.15)" : "rgba(99,102,241,0.10)",
+            border: dark ? "1px solid rgba(251,191,36,0.35)" : "1px solid rgba(99,102,241,0.25)",
             color: dark ? "#fbbf24" : "#6366f1",
           }}
         >
-          {dark ? (
-            <>
-              <SunIcon className="w-4 h-4" />
-              {!isMobile && <span>Clair</span>}
-            </>
-          ) : (
-            <>
-              <MoonIcon className="w-4 h-4" />
-              {!isMobile && <span>Sombre</span>}
-            </>
-          )}
+          {dark
+            ? <><SunIcon className="w-4 h-4" />{!isMobile && <span>Clair</span>}</>
+            : <><MoonIcon className="w-4 h-4" />{!isMobile && <span>Sombre</span>}</>
+          }
         </button>
 
         {/* ── Hamburger mobile ── */}
@@ -215,10 +222,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
             className="flex items-center justify-center ml-2 p-1.5 rounded-lg border-0 bg-transparent cursor-pointer"
             style={{ color: "var(--text)" }}
           >
-            {mobileOpen
-              ? <XMarkIcon className="w-5 h-5" />
-              : <Bars3Icon className="w-5 h-5" />
-            }
+            {mobileOpen ? <XMarkIcon className="w-5 h-5" /> : <Bars3Icon className="w-5 h-5" />}
           </button>
         )}
       </nav>
@@ -250,7 +254,6 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
             transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
           }}
         >
-          {/* Accueil */}
           <button
             onClick={() => goTo(null, null)}
             className="flex items-center gap-3 px-5 py-4 text-[14px] border-0 cursor-pointer text-left transition-colors"
@@ -264,7 +267,6 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
             Accueil
           </button>
 
-          {/* Catégories en accordéon — via Disclosure de HeadlessUI */}
           {CATEGORIES.map(cat => (
             <Disclosure key={cat.id} defaultOpen={categoryId === cat.id}>
               {({ open }) => (
@@ -273,26 +275,15 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
                     className="flex items-center gap-3 w-full px-5 py-3.5 text-left cursor-pointer"
                     style={{
                       background: categoryId === cat.id && !open ? `${cat.color}10` : "transparent",
-                      borderLeft: categoryId === cat.id ? `3px solid ${cat.color}` : "3px solid transparent",
                       border: "none",
                       borderLeft: categoryId === cat.id ? `3px solid ${cat.color}` : "3px solid transparent",
                     }}
                   >
-                    <span
-                      className="flex-1 text-[14px]"
-                      style={{ fontWeight: categoryId === cat.id ? 600 : 500, color: categoryId === cat.id ? cat.color : "var(--text)" }}
-                    >
+                    <span className="flex-1 text-[14px]" style={{ fontWeight: categoryId === cat.id ? 600 : 500, color: categoryId === cat.id ? cat.color : "var(--text)" }}>
                       {cat.label}
                     </span>
-                    <ChevronDownIcon
-                      className="w-4 h-4 transition-transform duration-200"
-                      style={{
-                        transform: open ? "rotate(180deg)" : "none",
-                        color: "var(--text-muted)",
-                      }}
-                    />
+                    <ChevronDownIcon className="w-4 h-4 transition-transform duration-200" style={{ transform: open ? "rotate(180deg)" : "none", color: "var(--text-muted)" }} />
                   </DisclosureButton>
-
                   <Transition
                     enter="transition duration-150 ease-out"
                     enterFrom="opacity-0 -translate-y-1"
@@ -315,10 +306,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
                             }}
                           >
                             <div>
-                              <p
-                                className="text-[13px] m-0"
-                                style={{ fontWeight: isActive ? 600 : 400, color: isActive ? cat.color : "var(--text)" }}
-                              >
+                              <p className="text-[13px] m-0" style={{ fontWeight: isActive ? 600 : 400, color: isActive ? cat.color : "var(--text)" }}>
                                 {app.label}
                               </p>
                               {app.description && (
@@ -343,7 +331,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Carte réutilisable — sans emoji
+   Carte réutilisable
 ───────────────────────────────────────────────────────────────────────────── */
 function AppCard({ item, accent, onClick }) {
   const [hovered, setHovered] = useState(false)
@@ -361,21 +349,11 @@ function AppCard({ item, accent, onClick }) {
         boxShadow: hovered ? `0 8px 32px ${accent}22` : "var(--shadow)",
       }}
     >
-      {/* Barre colorée en haut */}
-      <div
-        className="w-8 h-1 rounded-full mb-4 transition-all duration-200"
-        style={{ background: hovered ? accent : "var(--border)" }}
-      />
-      <p
-        className="font-bold mb-1.5 m-0"
-        style={{ fontSize: "clamp(13px, 3vw, 15px)", color: "var(--text)" }}
-      >
+      <div className="w-8 h-1 rounded-full mb-4 transition-all duration-200" style={{ background: hovered ? accent : "var(--border)" }} />
+      <p className="font-bold mb-1.5 m-0" style={{ fontSize: "clamp(13px, 3vw, 15px)", color: "var(--text)" }}>
         {item.label}
       </p>
-      <p
-        className="m-0 leading-relaxed"
-        style={{ fontSize: "clamp(11px, 2.5vw, 12px)", color: "var(--text-muted)" }}
-      >
+      <p className="m-0 leading-relaxed" style={{ fontSize: "clamp(11px, 2.5vw, 12px)", color: "var(--text-muted)" }}>
         {item.description}
       </p>
     </button>
@@ -389,6 +367,19 @@ export default function App() {
   const [categoryId, setCategoryId] = useState(null)
   const [appId, setAppId]           = useState(null)
   const { dark, setDark }           = useTheme()
+  const [expanded, setExpanded]     = useState(false)
+
+  // Applique / retire la classe "expanded" sur #root pour lever la contrainte de largeur
+  useEffect(() => {
+    const root = document.getElementById("root")
+    if (!root) return
+    if (expanded) {
+      root.classList.add("expanded")
+    } else {
+      root.classList.remove("expanded")
+    }
+    return () => root.classList.remove("expanded")
+  }, [expanded])
 
   const nav = (
     <TopNav
@@ -398,6 +389,8 @@ export default function App() {
       setAppId={setAppId}
       dark={dark}
       setDark={setDark}
+      expanded={expanded}
+      setExpanded={setExpanded}
     />
   )
 
@@ -422,19 +415,11 @@ export default function App() {
         {nav}
         <div
           className="min-h-[calc(100vh-56px)] flex flex-col items-center"
-          style={{
-            background: "var(--bg)",
-            padding: "clamp(1rem,4vw,2rem)",
-            paddingTop: "clamp(1.5rem,5vw,3rem)",
-          }}
+          style={{ background: "var(--bg)", padding: "clamp(1rem,4vw,2rem)", paddingTop: "clamp(1.5rem,5vw,3rem)" }}
         >
           <div className="text-center mb-10 w-full max-w-3xl">
-            {/* Trait coloré */}
             <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background: cat.color }} />
-            <h1
-              className="font-extrabold tracking-tight mt-0 mb-1"
-              style={{ fontSize: "clamp(20px,4vw,26px)", color: "var(--text)" }}
-            >
+            <h1 className="font-extrabold tracking-tight mt-0 mb-1" style={{ fontSize: "clamp(20px,4vw,26px)", color: "var(--text)" }}>
               {cat.label}
             </h1>
             <p className="m-0" style={{ fontSize: "clamp(12px,3vw,14px)", color: "var(--text-muted)" }}>
@@ -457,17 +442,10 @@ export default function App() {
       {nav}
       <div
         className="min-h-[calc(100vh-56px)] flex flex-col items-center"
-        style={{
-          background: "var(--bg)",
-          padding: "clamp(1rem,4vw,2rem)",
-          paddingTop: "clamp(1.5rem,5vw,3rem)",
-        }}
+        style={{ background: "var(--bg)", padding: "clamp(1rem,4vw,2rem)", paddingTop: "clamp(1.5rem,5vw,3rem)" }}
       >
         <div className="text-center mb-10 w-full max-w-3xl">
-          <h1
-            className="font-extrabold tracking-tight mt-0 mb-1"
-            style={{ fontSize: "clamp(20px,4vw,26px)", color: "var(--text)" }}
-          >
+          <h1 className="font-extrabold tracking-tight mt-0 mb-1" style={{ fontSize: "clamp(20px,4vw,26px)", color: "var(--text)" }}>
             Simulations MDC
           </h1>
           <p className="m-0" style={{ fontSize: "clamp(12px,3vw,14px)", color: "var(--text-muted)" }}>
