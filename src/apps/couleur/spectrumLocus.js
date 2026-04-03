@@ -1,4 +1,4 @@
-const SPECTRUM_LOCUS = [
+export const SPECTRUM_LOCUS = [
   { nm: 380, x: 0.1741, y: 0.0050 },
   { nm: 390, x: 0.1740, y: 0.0042 },
   { nm: 400, x: 0.1733, y: 0.0048 },
