@@ -363,7 +363,7 @@ function PointPopup({ point, idx, allPoints, pairA, pairB, showDelta, onClose, o
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
             <div>
-              <div style={{ fontSize: 7, fontWeight: 700, color: "var(--color-text-secondary)" }}>ΔE*₇₆ {isStandard ? "-> Éch." : "-> Std."}</div>
+              <div style={{ fontSize: 7, fontWeight: 700, color: "var(--color-text-secondary)" }}>ΔE*₇₆ {isStandard ? {'->'} Éch. : {'->'} Std.}</div>
               <div style={{ fontSize: 7, color: "var(--color-text-secondary)" }}>{otherPoint.name || `Pt ${allPoints.indexOf(otherPoint) + 1}`}</div>
             </div>
             <div style={{ textAlign: "right" }}>
@@ -2850,7 +2850,7 @@ export default function CIELABExplorer() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             <div style={{ background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: 11, padding: 14 }}>
-              <div style={{ fontSize: 9, fontWeight: 800, color: "var(--color-text-secondary)", letterSpacing: ".07em", textTransform: "uppercase", marginBottom: 10 }}>Transformation XYZ -> L*a*b*</div>
+              <div style={{ fontSize: 9, fontWeight: 800, color: "var(--color-text-secondary)", letterSpacing: ".07em", textTransform: "uppercase", marginBottom: 10 }}>Transformation XYZ {'->'}  L*a*b*</div>
               <div style={{ fontFamily: "monospace", fontSize: 10, background: "var(--color-background-secondary)", padding: "9px 11px", borderRadius: 6, lineHeight: 2 }}>
                 f(t) = t^(1/3) si t {">"} 0.008856<br />
                 f(t) = 7.787·t + 16/116 sinon<br /><br />
@@ -2863,8 +2863,8 @@ export default function CIELABExplorer() {
             <div style={{ background: "var(--color-background-primary)", border: "0.5px solid var(--color-border-tertiary)", borderRadius: 11, padding: 14 }}>
               <div style={{ fontSize: 9, fontWeight: 800, color: "var(--color-text-secondary)", letterSpacing: ".07em", textTransform: "uppercase", marginBottom: 10 }}>Formules clés</div>
               <div style={{ fontFamily: "monospace", fontSize: 10, background: "var(--color-background-secondary)", padding: "9px 11px", borderRadius: 6, lineHeight: 2 }}>
-                <span style={{ color: "#1D9E75" }}>C* = √(a*² + b*²)  -> saturation</span><br />
-                <span style={{ color: "#185FA5" }}>h  = arctan(b*/a*) -> teinte (0–360°)</span><br />
+                <span style={{ color: "#1D9E75" }}>C* = √(a*² + b*²)  {'->'}  saturation</span><br />
+                <span style={{ color: "#185FA5" }}>h  = arctan(b*/a*) {'->'}  teinte (0–360°)</span><br />
                 <span style={{ color: "#E24B4A" }}>ΔE = √(ΔL*² + Δa*² + Δb*²)</span>
               </div>
             </div>
