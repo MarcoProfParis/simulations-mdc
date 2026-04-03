@@ -363,7 +363,7 @@ function PointPopup({ point, idx, allPoints, pairA, pairB, showDelta, onClose, o
             display: "flex", alignItems: "center", justifyContent: "space-between",
           }}>
             <div>
-              <div style={{ fontSize: 7, fontWeight: 700, color: "var(--color-text-secondary)" }}>ΔE*₇₆ {isStandard ? {'->'} Éch. : {'->'} Std.}</div>
+              <div style={{ fontSize: 7, fontWeight: 700, color: "var(--color-text-secondary)" }}>ΔE*₇₆ {isStandard ? "-> Éch." : "-> Std."}</div>
               <div style={{ fontSize: 7, color: "var(--color-text-secondary)" }}>{otherPoint.name || `Pt ${allPoints.indexOf(otherPoint) + 1}`}</div>
             </div>
             <div style={{ textAlign: "right" }}>
