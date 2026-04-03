@@ -2,63 +2,71 @@ import { useState, useRef, useEffect, useCallback } from "react"
 import { CATEGORIES } from "./config"
 import { useTheme } from "./ThemeContext"
 
-// ── Hook : détection mobile (< 768px) ────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────────
+   Hook : détection mobile < 768 px
+───────────────────────────────────────────────────────────────────────────── */
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)")
-    const handler = e => setIsMobile(e.matches)
-    mq.addEventListener("change", handler)
-    return () => mq.removeEventListener("change", handler)
+    const h = e => setIsMobile(e.matches)
+    mq.addEventListener("change", h)
+    return () => mq.removeEventListener("change", h)
   }, [])
   return isMobile
 }
 
-// ── Icône hamburger / croix ───────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────────
+   Icône hamburger / croix animée
+───────────────────────────────────────────────────────────────────────────── */
 function HamburgerIcon({ open }) {
-  const base = {
-    display: "block",
-    width: 22,
-    height: 2,
-    background: "var(--text)",
-    borderRadius: 2,
-    transition: "transform 0.25s, opacity 0.2s",
-    transformOrigin: "center",
-  }
   return (
-    <div style={{ width: 22, height: 16, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
-      <span style={{ ...base, transform: open ? "translateY(7px) rotate(45deg)" : "none" }} />
-      <span style={{ ...base, opacity: open ? 0 : 1 }} />
-      <span style={{ ...base, transform: open ? "translateY(-7px) rotate(-45deg)" : "none" }} />
+    <div className="flex flex-col justify-between w-[22px] h-[16px]">
+      <span
+        className="block h-[2px] rounded-sm transition-transform duration-250 origin-center"
+        style={{
+          background: "var(--text)",
+          transform: open ? "translateY(7px) rotate(45deg)" : "none",
+        }}
+      />
+      <span
+        className="block h-[2px] rounded-sm transition-opacity duration-200"
+        style={{ background: "var(--text)", opacity: open ? 0 : 1 }}
+      />
+      <span
+        className="block h-[2px] rounded-sm transition-transform duration-250 origin-center"
+        style={{
+          background: "var(--text)",
+          transform: open ? "translateY(-7px) rotate(-45deg)" : "none",
+        }}
+      />
     </div>
   )
 }
 
-// ── Barre de navigation ───────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────────
+   Barre de navigation
+───────────────────────────────────────────────────────────────────────────── */
 function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
-  const [openMenu, setOpenMenu] = useState(null)
-  const [mobileOpen, setMobileOpen] = useState(false)
+  const [openMenu, setOpenMenu]             = useState(null)
+  const [mobileOpen, setMobileOpen]         = useState(false)
   const [mobileExpanded, setMobileExpanded] = useState(null)
-  const navRef = useRef(null)
+  const navRef   = useRef(null)
   const isMobile = useIsMobile()
 
-  // Fermer dropdown desktop au clic dehors
+  /* Fermer dropdown desktop au clic dehors */
   useEffect(() => {
-    function handleClick(e) {
-      if (navRef.current && !navRef.current.contains(e.target)) {
-        setOpenMenu(null)
-      }
+    const h = e => {
+      if (navRef.current && !navRef.current.contains(e.target)) setOpenMenu(null)
     }
-    document.addEventListener("mousedown", handleClick)
-    return () => document.removeEventListener("mousedown", handleClick)
+    document.addEventListener("mousedown", h)
+    return () => document.removeEventListener("mousedown", h)
   }, [])
 
-  // Fermer le drawer au passage desktop
-  useEffect(() => {
-    if (!isMobile) setMobileOpen(false)
-  }, [isMobile])
+  /* Fermer drawer au passage desktop */
+  useEffect(() => { if (!isMobile) setMobileOpen(false) }, [isMobile])
 
-  // Bloquer le scroll body quand drawer ouvert
+  /* Bloquer scroll body quand drawer ouvert */
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? "hidden" : ""
     return () => { document.body.style.overflow = "" }
@@ -74,136 +82,104 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
 
   return (
     <>
+      {/* ── Barre principale ── */}
       <nav
         ref={navRef}
+        className="sticky top-0 z-50 flex items-center h-13 px-4"
         style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 1000,
           background: "var(--bg-card)",
           borderBottom: "1px solid var(--border)",
           boxShadow: "0 1px 8px rgba(0,0,0,0.07)",
-          display: "flex",
-          alignItems: "center",
-          padding: "0 16px",
-          height: 52,
         }}
       >
         {/* Logo */}
         <button
           onClick={() => goTo(null, null)}
+          className="flex items-center gap-2 h-full pr-4 mr-2 shrink-0 font-extrabold tracking-tight cursor-pointer border-0 bg-transparent whitespace-nowrap"
           style={{
-            background: "none",
-            border: "none",
-            cursor: "pointer",
-            padding: "0 14px 0 0",
-            marginRight: 8,
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            borderRight: "1px solid var(--border)",
-            height: "100%",
-            color: "var(--text)",
-            fontWeight: 800,
             fontSize: isMobile ? 13 : 15,
-            letterSpacing: "-0.02em",
-            flexShrink: 0,
-            fontFamily: "system-ui, sans-serif",
-            whiteSpace: "nowrap",
+            color: "var(--text)",
+            borderRight: "1px solid var(--border)",
           }}
         >
           🧪 <span>Simulations MDC</span>
         </button>
 
-        {/* ── DESKTOP : menus catégories ── */}
+        {/* ── DESKTOP : catégories ── */}
         {!isMobile && (
-          <div style={{ display: "flex", alignItems: "center", flex: 1, height: "100%" }}>
+          <div className="flex items-center flex-1 h-full">
             {CATEGORIES.map(cat => {
-              const isOpen = openMenu === cat.id
+              const isOpen      = openMenu === cat.id
               const isCatActive = categoryId === cat.id
               return (
-                <div key={cat.id} style={{ position: "relative", height: "100%" }}>
+                <div key={cat.id} className="relative h-full">
                   <button
                     onClick={() => setOpenMenu(isOpen ? null : cat.id)}
+                    onMouseEnter={e => { if (!isCatActive) e.currentTarget.style.color = cat.color }}
+                    onMouseLeave={e => { if (!isCatActive) e.currentTarget.style.color = "var(--text)" }}
+                    className="flex items-center gap-1.5 h-full px-4 text-[13px] whitespace-nowrap border-0 bg-transparent cursor-pointer transition-colors duration-150"
                     style={{
-                      background: "none",
-                      border: "none",
-                      cursor: "pointer",
-                      height: "100%",
-                      padding: "0 16px",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: 6,
-                      fontSize: 13,
                       fontWeight: isCatActive ? 700 : 500,
                       color: isCatActive ? cat.color : "var(--text)",
                       borderBottom: isCatActive ? `2px solid ${cat.color}` : "2px solid transparent",
-                      transition: "color 0.15s",
-                      whiteSpace: "nowrap",
-                      fontFamily: "system-ui, sans-serif",
                     }}
-                    onMouseEnter={e => { if (!isCatActive) e.currentTarget.style.color = cat.color }}
-                    onMouseLeave={e => { if (!isCatActive) e.currentTarget.style.color = "var(--text)" }}
                   >
-                    <span style={{ fontSize: 16 }}>{cat.emoji}</span>
+                    <span className="text-base">{cat.emoji}</span>
                     {cat.label}
-                    <span style={{
-                      fontSize: 9, marginLeft: 2, opacity: 0.5,
-                      display: "inline-block",
-                      transform: isOpen ? "rotate(180deg)" : "none",
-                      transition: "transform 0.2s",
-                    }}>▾</span>
+                    <span
+                      className="text-[9px] ml-0.5 opacity-50 inline-block transition-transform duration-200"
+                      style={{ transform: isOpen ? "rotate(180deg)" : "none" }}
+                    >▾</span>
                   </button>
 
-                  {/* Dropdown desktop */}
+                  {/* Dropdown */}
                   {isOpen && (
-                    <div style={{
-                      position: "absolute",
-                      top: "calc(100% + 1px)",
-                      left: 0,
-                      minWidth: 230,
-                      background: "var(--bg-card)",
-                      border: "1px solid var(--border)",
-                      borderRadius: "0 0 12px 12px",
-                      boxShadow: "0 8px 32px rgba(0,0,0,0.13)",
-                      overflow: "hidden",
-                      zIndex: 1001,
-                    }}>
-                      <div style={{
-                        padding: "10px 14px 8px",
-                        borderBottom: "1px solid var(--border)",
-                        display: "flex", alignItems: "center", gap: 8,
-                      }}>
-                        <span style={{ fontSize: 20 }}>{cat.emoji}</span>
+                    <div
+                      className="absolute top-[calc(100%+1px)] left-0 min-w-[230px] z-[60] overflow-hidden"
+                      style={{
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border)",
+                        borderRadius: "0 0 12px 12px",
+                        boxShadow: "0 8px 32px rgba(0,0,0,0.13)",
+                      }}
+                    >
+                      {/* En-tête catégorie */}
+                      <div
+                        className="flex items-center gap-2 px-3.5 pt-2.5 pb-2"
+                        style={{ borderBottom: "1px solid var(--border)" }}
+                      >
+                        <span className="text-xl">{cat.emoji}</span>
                         <div>
-                          <div style={{ fontSize: 12, fontWeight: 700, color: cat.color, fontFamily: "system-ui, sans-serif" }}>{cat.label}</div>
-                          <div style={{ fontSize: 10, color: "var(--text-muted)", fontFamily: "system-ui, sans-serif" }}>{cat.description}</div>
+                          <p className="text-[12px] font-bold m-0" style={{ color: cat.color }}>{cat.label}</p>
+                          <p className="text-[10px] m-0" style={{ color: "var(--text-muted)" }}>{cat.description}</p>
                         </div>
                       </div>
+
+                      {/* Apps */}
                       {cat.apps.map(app => {
                         const isActive = categoryId === cat.id && appId === app.id
                         return (
                           <button
                             key={app.id}
                             onClick={() => goTo(cat.id, app.id)}
-                            style={{
-                              display: "flex", alignItems: "center", gap: 10,
-                              width: "100%", padding: "9px 14px",
-                              background: isActive ? `${cat.color}12` : "none",
-                              border: "none",
-                              borderLeft: isActive ? `3px solid ${cat.color}` : "3px solid transparent",
-                              cursor: "pointer", textAlign: "left",
-                              transition: "background 0.12s",
-                              fontFamily: "system-ui, sans-serif",
-                            }}
                             onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--bg)" }}
                             onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none" }}
+                            className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-left border-0 cursor-pointer transition-colors duration-150"
+                            style={{
+                              background: isActive ? `${cat.color}12` : "none",
+                              borderLeft: isActive ? `3px solid ${cat.color}` : "3px solid transparent",
+                            }}
                           >
-                            <span style={{ fontSize: 18, flexShrink: 0 }}>{app.emoji}</span>
+                            <span className="text-lg shrink-0">{app.emoji}</span>
                             <div>
-                              <div style={{ fontSize: 13, fontWeight: isActive ? 700 : 500, color: isActive ? cat.color : "var(--text)" }}>{app.label}</div>
+                              <p
+                                className="text-[13px] m-0"
+                                style={{ fontWeight: isActive ? 700 : 500, color: isActive ? cat.color : "var(--text)" }}
+                              >{app.label}</p>
                               {app.description && (
-                                <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.4, marginTop: 1 }}>{app.description}</div>
+                                <p className="text-[10px] leading-snug mt-0.5 m-0" style={{ color: "var(--text-muted)" }}>
+                                  {app.description}
+                                </p>
                               )}
                             </div>
                           </button>
@@ -218,223 +194,145 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
         )}
 
         {/* Spacer mobile */}
-        {isMobile && <div style={{ flex: 1 }} />}
+        {isMobile && <div className="flex-1" />}
 
         {/* Bouton thème */}
         <button
           onClick={() => setDark(d => !d)}
+          className="shrink-0 px-3 py-1 rounded-full text-[12px] font-semibold cursor-pointer border transition-colors duration-150"
           style={{
-            padding: "5px 10px",
-            borderRadius: 20,
-            border: "1px solid var(--border)",
             background: "var(--bg)",
+            borderColor: "var(--border)",
             color: "var(--text-muted)",
-            cursor: "pointer",
-            fontSize: 13,
-            fontWeight: 600,
-            flexShrink: 0,
             marginLeft: isMobile ? 8 : 12,
           }}
         >
           {dark ? "☀️" : "🌙"}
         </button>
 
-        {/* Bouton hamburger — mobile seulement */}
+        {/* Hamburger — mobile seulement */}
         {isMobile && (
           <button
             onClick={() => setMobileOpen(o => !o)}
             aria-label={mobileOpen ? "Fermer le menu" : "Ouvrir le menu"}
-            style={{
-              background: "none",
-              border: "none",
-              cursor: "pointer",
-              padding: "6px",
-              marginLeft: 8,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              borderRadius: 8,
-            }}
+            className="flex items-center justify-center ml-2 p-1.5 rounded-lg border-0 bg-transparent cursor-pointer"
           >
             <HamburgerIcon open={mobileOpen} />
           </button>
         )}
       </nav>
 
-      {/* ── MOBILE : Drawer latéral ── */}
+      {/* ── MOBILE : overlay ── */}
       {isMobile && (
-        <>
-          {/* Overlay sombre */}
-          <div
-            onClick={() => setMobileOpen(false)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              top: 52,
-              zIndex: 998,
-              background: "rgba(0,0,0,0.35)",
-              opacity: mobileOpen ? 1 : 0,
-              pointerEvents: mobileOpen ? "auto" : "none",
-              transition: "opacity 0.25s",
-            }}
-          />
+        <div
+          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-[49] transition-opacity duration-250"
+          style={{
+            top: 52,
+            background: "rgba(0,0,0,0.35)",
+            opacity: mobileOpen ? 1 : 0,
+            pointerEvents: mobileOpen ? "auto" : "none",
+          }}
+        />
+      )}
 
-          {/* Panneau drawer */}
-          <div
+      {/* ── MOBILE : Drawer ── */}
+      {isMobile && (
+        <div
+          className="fixed top-[52px] right-0 bottom-0 z-50 flex flex-col overflow-y-auto"
+          style={{
+            width: "min(300px, 85vw)",
+            background: "var(--bg-card)",
+            borderLeft: "1px solid var(--border)",
+            boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
+            transform: mobileOpen ? "translateX(0)" : "translateX(100%)",
+            transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
+          }}
+        >
+          {/* Accueil */}
+          <button
+            onClick={() => goTo(null, null)}
+            className="flex items-center gap-2.5 px-4 py-3.5 text-[14px] border-0 cursor-pointer text-left"
             style={{
-              position: "fixed",
-              top: 52,
-              right: 0,
-              bottom: 0,
-              zIndex: 999,
-              width: "min(300px, 85vw)",
-              background: "var(--bg-card)",
-              borderLeft: "1px solid var(--border)",
-              boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
-              transform: mobileOpen ? "translateX(0)" : "translateX(100%)",
-              transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
-              overflowY: "auto",
-              display: "flex",
-              flexDirection: "column",
+              background: !categoryId ? "var(--bg)" : "none",
+              borderBottom: "1px solid var(--border)",
+              borderLeft: !categoryId ? "3px solid var(--text)" : "3px solid transparent",
+              fontWeight: !categoryId ? 700 : 500,
+              color: "var(--text)",
             }}
           >
-            {/* Accueil */}
-            <button
-              onClick={() => goTo(null, null)}
-              style={{
-                display: "flex", alignItems: "center", gap: 10,
-                padding: "14px 18px",
-                background: !categoryId ? "var(--bg)" : "none",
-                border: "none",
-                borderBottom: "1px solid var(--border)",
-                borderLeft: !categoryId ? "3px solid var(--text)" : "3px solid transparent",
-                cursor: "pointer", textAlign: "left",
-                fontFamily: "system-ui, sans-serif",
-                fontWeight: !categoryId ? 700 : 500,
-                fontSize: 14,
-                color: "var(--text)",
-              }}
-            >
-              🏠 <span>Accueil</span>
-            </button>
+            🏠 <span>Accueil</span>
+          </button>
 
-            {/* Catégories accordéon */}
-            {CATEGORIES.map(cat => {
-              const isExpanded = mobileExpanded === cat.id
-              const isCatActive = categoryId === cat.id
-              return (
-                <div key={cat.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                  <button
-                    onClick={() => setMobileExpanded(isExpanded ? null : cat.id)}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10,
-                      width: "100%", padding: "13px 18px",
-                      background: isCatActive && !isExpanded ? `${cat.color}10` : "none",
-                      border: "none",
-                      borderLeft: isCatActive ? `3px solid ${cat.color}` : "3px solid transparent",
-                      cursor: "pointer", textAlign: "left",
-                      fontFamily: "system-ui, sans-serif",
-                    }}
-                  >
-                    <span style={{ fontSize: 20 }}>{cat.emoji}</span>
-                    <span style={{
-                      flex: 1, fontSize: 14, fontWeight: isCatActive ? 700 : 500,
-                      color: isCatActive ? cat.color : "var(--text)",
-                    }}>{cat.label}</span>
-                    <span style={{
-                      fontSize: 10, color: "var(--text-muted)",
-                      display: "inline-block",
-                      transform: isExpanded ? "rotate(180deg)" : "none",
-                      transition: "transform 0.2s",
-                    }}>▾</span>
-                  </button>
+          {/* Catégories accordéon */}
+          {CATEGORIES.map(cat => {
+            const isExpanded  = mobileExpanded === cat.id
+            const isCatActive = categoryId === cat.id
+            return (
+              <div key={cat.id} style={{ borderBottom: "1px solid var(--border)" }}>
+                <button
+                  onClick={() => setMobileExpanded(isExpanded ? null : cat.id)}
+                  className="flex items-center gap-2.5 w-full px-4 py-3 text-left border-0 cursor-pointer"
+                  style={{
+                    background: isCatActive && !isExpanded ? `${cat.color}10` : "none",
+                    borderLeft: isCatActive ? `3px solid ${cat.color}` : "3px solid transparent",
+                  }}
+                >
+                  <span className="text-xl">{cat.emoji}</span>
+                  <span
+                    className="flex-1 text-[14px]"
+                    style={{ fontWeight: isCatActive ? 700 : 500, color: isCatActive ? cat.color : "var(--text)" }}
+                  >{cat.label}</span>
+                  <span
+                    className="text-[10px] inline-block transition-transform duration-200"
+                    style={{ color: "var(--text-muted)", transform: isExpanded ? "rotate(180deg)" : "none" }}
+                  >▾</span>
+                </button>
 
-                  {/* Apps de la catégorie */}
-                  {isExpanded && (
-                    <div style={{ background: "var(--bg)" }}>
-                      {cat.apps.map(app => {
-                        const isActive = categoryId === cat.id && appId === app.id
-                        return (
-                          <button
-                            key={app.id}
-                            onClick={() => goTo(cat.id, app.id)}
-                            style={{
-                              display: "flex", alignItems: "center", gap: 10,
-                              width: "100%", padding: "10px 18px 10px 30px",
-                              background: isActive ? `${cat.color}12` : "none",
-                              border: "none",
-                              borderLeft: isActive ? `3px solid ${cat.color}` : "3px solid transparent",
-                              cursor: "pointer", textAlign: "left",
-                              fontFamily: "system-ui, sans-serif",
-                            }}
-                          >
-                            <span style={{ fontSize: 16, flexShrink: 0 }}>{app.emoji}</span>
-                            <div>
-                              <div style={{
-                                fontSize: 13, fontWeight: isActive ? 700 : 400,
-                                color: isActive ? cat.color : "var(--text)",
-                              }}>{app.label}</div>
-                              {app.description && (
-                                <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 1 }}>{app.description}</div>
-                              )}
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </>
+                {/* Apps */}
+                {isExpanded && (
+                  <div style={{ background: "var(--bg)" }}>
+                    {cat.apps.map(app => {
+                      const isActive = categoryId === cat.id && appId === app.id
+                      return (
+                        <button
+                          key={app.id}
+                          onClick={() => goTo(cat.id, app.id)}
+                          className="flex items-center gap-2.5 w-full pl-8 pr-4 py-2.5 text-left border-0 cursor-pointer"
+                          style={{
+                            background: isActive ? `${cat.color}12` : "none",
+                            borderLeft: isActive ? `3px solid ${cat.color}` : "3px solid transparent",
+                          }}
+                        >
+                          <span className="text-base shrink-0">{app.emoji}</span>
+                          <div>
+                            <p
+                              className="text-[13px] m-0"
+                              style={{ fontWeight: isActive ? 700 : 400, color: isActive ? cat.color : "var(--text)" }}
+                            >{app.label}</p>
+                            {app.description && (
+                              <p className="text-[10px] mt-0.5 m-0" style={{ color: "var(--text-muted)" }}>
+                                {app.description}
+                              </p>
+                            )}
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       )}
     </>
   )
 }
 
-// ── Styles partagés ──────────────────────────────────────────────────────────
-const pageStyle = {
-  minHeight: "calc(100vh - 52px)",
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "center",
-  background: "var(--bg)",
-  fontFamily: "system-ui, sans-serif",
-  padding: "clamp(1rem, 4vw, 2rem)",
-  paddingTop: "clamp(1.5rem, 5vw, 3rem)",
-}
-
-const headerStyle = {
-  textAlign: "center",
-  marginBottom: 40,
-  width: "100%",
-}
-
-const h1Style = {
-  fontSize: "clamp(20px, 4vw, 26px)",
-  fontWeight: 800,
-  color: "var(--text)",
-  margin: "8px 0 4px",
-  letterSpacing: "-0.02em",
-}
-
-const subtitleStyle = {
-  fontSize: "clamp(12px, 3vw, 14px)",
-  color: "var(--text-muted)",
-  margin: 0,
-}
-
-const gridStyle = {
-  display: "flex",
-  gap: "clamp(12px, 3vw, 20px)",
-  flexWrap: "wrap",
-  justifyContent: "center",
-  width: "100%",
-  maxWidth: 900,
-}
-
-// ── Carte réutilisable ────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────────
+   Carte réutilisable
+───────────────────────────────────────────────────────────────────────────── */
 function AppCard({ item, accent, onClick }) {
   const [hovered, setHovered] = useState(false)
   return (
@@ -442,35 +340,35 @@ function AppCard({ item, accent, onClick }) {
       onClick={onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      className="text-left rounded-2xl cursor-pointer transition-all duration-200 border-2"
       style={{
         width: "clamp(150px, 42vw, 240px)",
         padding: "clamp(16px, 4vw, 28px) clamp(12px, 3vw, 24px)",
-        borderRadius: 14,
-        border: `2px solid ${hovered ? accent : "var(--border)"}`,
+        borderColor: hovered ? accent : "var(--border)",
         background: hovered ? `${accent}18` : "var(--bg-card)",
-        cursor: "pointer",
-        textAlign: "left",
         boxShadow: hovered ? `0 8px 24px ${accent}22` : "var(--shadow)",
-        transition: "all 0.18s ease",
-        fontFamily: "system-ui, sans-serif",
       }}
     >
-      <div style={{ fontSize: "clamp(26px, 5vw, 36px)", marginBottom: 10 }}>{item.emoji}</div>
-      <div style={{ fontSize: "clamp(13px, 3vw, 15px)", fontWeight: 700, marginBottom: 6, color: "var(--text)" }}>
-        {item.label}
-      </div>
-      <div style={{ fontSize: "clamp(11px, 2.5vw, 12px)", color: "var(--text-muted)", lineHeight: 1.6 }}>
-        {item.description}
-      </div>
+      <div className="mb-3" style={{ fontSize: "clamp(26px, 5vw, 36px)" }}>{item.emoji}</div>
+      <p
+        className="font-bold mb-1.5 m-0"
+        style={{ fontSize: "clamp(13px, 3vw, 15px)", color: "var(--text)" }}
+      >{item.label}</p>
+      <p
+        className="m-0 leading-relaxed"
+        style={{ fontSize: "clamp(11px, 2.5vw, 12px)", color: "var(--text-muted)" }}
+      >{item.description}</p>
     </button>
   )
 }
 
-// ── Composant principal ───────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────────────────
+   Composant principal
+───────────────────────────────────────────────────────────────────────────── */
 export default function App() {
   const [categoryId, setCategoryId] = useState(null)
-  const [appId, setAppId] = useState(null)
-  const { dark, setDark } = useTheme()
+  const [appId, setAppId]           = useState(null)
+  const { dark, setDark }           = useTheme()
 
   const nav = (
     <TopNav
@@ -483,7 +381,7 @@ export default function App() {
     />
   )
 
-  // Niveau 3 — affichage d'une app
+  /* Niveau 3 — affichage d'une app */
   if (categoryId && appId) {
     const cat = CATEGORIES.find(c => c.id === categoryId)
     const app = cat.apps.find(a => a.id === appId)
@@ -496,26 +394,33 @@ export default function App() {
     )
   }
 
-  // Niveau 2 — liste des apps d'une catégorie
+  /* Niveau 2 — liste des apps d'une catégorie */
   if (categoryId) {
     const cat = CATEGORIES.find(c => c.id === categoryId)
     return (
       <div>
         {nav}
-        <div style={pageStyle}>
-          <div style={headerStyle}>
-            <span style={{ fontSize: "clamp(32px, 7vw, 40px)" }}>{cat.emoji}</span>
-            <h1 style={h1Style}>{cat.label}</h1>
-            <p style={subtitleStyle}>{cat.description}</p>
+        <div
+          className="min-h-[calc(100vh-52px)] flex flex-col items-center"
+          style={{
+            background: "var(--bg)",
+            padding: "clamp(1rem,4vw,2rem)",
+            paddingTop: "clamp(1.5rem,5vw,3rem)",
+          }}
+        >
+          <div className="text-center mb-10 w-full">
+            <span style={{ fontSize: "clamp(32px,7vw,40px)" }}>{cat.emoji}</span>
+            <h1
+              className="font-extrabold tracking-tight mt-2 mb-1"
+              style={{ fontSize: "clamp(20px,4vw,26px)", color: "var(--text)" }}
+            >{cat.label}</h1>
+            <p className="m-0" style={{ fontSize: "clamp(12px,3vw,14px)", color: "var(--text-muted)" }}>
+              {cat.description}
+            </p>
           </div>
-          <div style={gridStyle}>
+          <div className="flex flex-wrap gap-5 justify-center w-full max-w-3xl">
             {cat.apps.map(app => (
-              <AppCard
-                key={app.id}
-                item={app}
-                accent={cat.color}
-                onClick={() => setAppId(app.id)}
-              />
+              <AppCard key={app.id} item={app} accent={cat.color} onClick={() => setAppId(app.id)} />
             ))}
           </div>
         </div>
@@ -523,23 +428,30 @@ export default function App() {
     )
   }
 
-  // Niveau 1 — accueil
+  /* Niveau 1 — accueil */
   return (
     <div>
       {nav}
-      <div style={pageStyle}>
-        <div style={headerStyle}>
-          <h1 style={h1Style}>Simulations MDC</h1>
-          <p style={subtitleStyle}>BTS Métiers de la Chimie</p>
+      <div
+        className="min-h-[calc(100vh-52px)] flex flex-col items-center"
+        style={{
+          background: "var(--bg)",
+          padding: "clamp(1rem,4vw,2rem)",
+          paddingTop: "clamp(1.5rem,5vw,3rem)",
+        }}
+      >
+        <div className="text-center mb-10 w-full">
+          <h1
+            className="font-extrabold tracking-tight mt-2 mb-1"
+            style={{ fontSize: "clamp(20px,4vw,26px)", color: "var(--text)" }}
+          >Simulations MDC</h1>
+          <p className="m-0" style={{ fontSize: "clamp(12px,3vw,14px)", color: "var(--text-muted)" }}>
+            BTS Métiers de la Chimie
+          </p>
         </div>
-        <div style={gridStyle}>
+        <div className="flex flex-wrap gap-5 justify-center w-full max-w-3xl">
           {CATEGORIES.map(cat => (
-            <AppCard
-              key={cat.id}
-              item={cat}
-              accent={cat.color}
-              onClick={() => setCategoryId(cat.id)}
-            />
+            <AppCard key={cat.id} item={cat} accent={cat.color} onClick={() => setCategoryId(cat.id)} />
           ))}
         </div>
       </div>
