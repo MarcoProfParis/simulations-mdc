@@ -1212,32 +1212,56 @@ function computeSaturation(pt, illuminantKey) {
 
 // ── Popup flottant draggable par point ───────────────────────────────────────
 function PointPopup({ pt, screenX, screenY, index, illuminant, onClose, onMove, onNameChange, onToggleSat, onDelete }) {
+  const popupRef  = useRef(null);               // ← bug corrigé : ref déclarée ici
   const offsetRef = useRef({ x: 0, y: 0 });
-  const [pos, setPos]           = useState({ x: screenX, y: screenY });
+  const posRef    = useRef({ x: screenX, y: screenY }); // ref pour éviter les stales dans les listeners
+  const [pos, setPos]         = useState({ x: screenX, y: screenY });
   const [dragging, setDragging] = useState(false);
 
+  // ── Clamp position dans la fenêtre ──────────────────────────────────────────
+  const clampPos = (x, y) => {
+    const el = popupRef.current;
+    const w = el ? el.offsetWidth  : 260;
+    const h = el ? el.offsetHeight : 300;
+    const nx = Math.max(8, Math.min(window.innerWidth  - w - 8, x));
+    const ny = Math.max(8, Math.min(window.innerHeight - h - 8, y));
+    return { x: nx, y: ny };
+  };
+
+  // ── Démarrer le drag ─────────────────────────────────────────────────────────
   const startDrag = (clientX, clientY) => {
-    offsetRef.current = { x: clientX - pos.x, y: clientY - pos.y };
+    offsetRef.current = { x: clientX - posRef.current.x, y: clientY - posRef.current.y };
     setDragging(true);
   };
-  const onMouseDown = (e) => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return; e.preventDefault(); startDrag(e.clientX, e.clientY); };
-  const onTouchDown = (e) => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return; const t = e.touches[0]; startDrag(t.clientX, t.clientY); };
 
+  const handleHeaderMouseDown = (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+    e.preventDefault();
+    startDrag(e.clientX, e.clientY);
+  };
+  const handleHeaderTouchStart = (e) => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return;
+    const t = e.touches[0];
+    startDrag(t.clientX, t.clientY);
+  };
+
+  // ── Listeners globaux pendant le drag ────────────────────────────────────────
   useEffect(() => {
     if (!dragging) return;
     const onMove_ = (e) => {
       const cx = e.clientX ?? e.touches?.[0]?.clientX;
       const cy = e.clientY ?? e.touches?.[0]?.clientY;
       if (cx == null) return;
-      const nx = cx - offsetRef.current.x;
-      const ny = cy - offsetRef.current.y;
-      setPos({ x: nx, y: ny });
-      onMove(nx, ny);
+      const raw = { x: cx - offsetRef.current.x, y: cy - offsetRef.current.y };
+      const clamped = clampPos(raw.x, raw.y);
+      posRef.current = clamped;
+      setPos(clamped);
+      onMove(clamped.x, clamped.y);
     };
     const onUp = () => setDragging(false);
     document.addEventListener('mousemove', onMove_);
     document.addEventListener('mouseup',   onUp);
-    document.addEventListener('touchmove', onMove_, { passive: true });
+    document.addEventListener('touchmove', onMove_, { passive: false });
     document.addEventListener('touchend',  onUp);
     return () => {
       document.removeEventListener('mousemove', onMove_);
@@ -1247,130 +1271,269 @@ function PointPopup({ pt, screenX, screenY, index, illuminant, onClose, onMove, 
     };
   }, [dragging, onMove]);
 
-  const s = illuminant ? computeSaturation(pt, illuminant) : null;
+  // Sync posRef quand pos change depuis l'extérieur
+  useEffect(() => { posRef.current = pos; }, [pos]);
+
+  const s       = illuminant ? computeSaturation(pt, illuminant) : null;
+  const satPct  = s ? parseFloat(s.sat) : 0;
+  const domColor = s?.domWl ? nmToRGB(s.domWl) : null;
+  const label   = pt.name || `Point #${index + 1}`;
+
+  // Petite pastille de couleur représentative (wavelength dominante)
+  const dotColor = domColor || "var(--text-muted)";
 
   return (
     <div
-      ref={dragRef}
-      onMouseDown={onMouseDown}
-      onTouchStart={onTouchDown}
+      ref={popupRef}
       style={{
         position: "fixed",
-        left: pos.x, top: pos.y,
+        left: pos.x,
+        top: pos.y,
         zIndex: 200,
-        width: 210,
+        width: 240,
         background: "var(--bg-card)",
-        border: "0.5px solid var(--border)",
-        borderRadius: 8,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-        fontSize: 11,
+        border: "1px solid var(--border)",
+        borderRadius: 12,
+        boxShadow: dragging
+          ? "0 20px 60px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.12)"
+          : "0 8px 32px rgba(0,0,0,0.16), 0 1px 4px rgba(0,0,0,0.08)",
+        fontSize: 12,
         userSelect: "none",
         touchAction: "none",
-        cursor: dragging ? "grabbing" : "grab",
+        transition: dragging ? "none" : "box-shadow 0.2s ease",
+        overflow: "hidden",
       }}
     >
-      {/* Handle de drag — barre supérieure */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "5px 8px 4px",
-        borderBottom: "0.5px solid var(--border)",
-        background: "var(--bg)",
-        borderRadius: "8px 8px 0 0",
-        cursor: "grab",
-      }}>
-        <span style={{ fontWeight: 600, fontSize: 12, color: "var(--text-muted)" }}>
-          {pt.name || `#${index + 1}`}
-        </span>
-        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+      {/* ── Barre de titre — zone de drag ── */}
+      <div
+        onMouseDown={handleHeaderMouseDown}
+        onTouchStart={handleHeaderTouchStart}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 8,
+          padding: "9px 10px 8px",
+          background: "var(--bg)",
+          borderBottom: "1px solid var(--border)",
+          cursor: dragging ? "grabbing" : "grab",
+        }}
+      >
+        {/* Pastille couleur */}
+        <div style={{
+          width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
+          background: dotColor,
+          border: "1.5px solid var(--border)",
+          boxShadow: domColor ? `0 0 0 2px ${domColor}33` : "none",
+        }} />
+
+        {/* Nom (éditable inline) */}
+        <input
+          type="text"
+          placeholder={`Point #${index + 1}`}
+          value={pt.name || ""}
+          onMouseDown={e => e.stopPropagation()}
+          onTouchStart={e => e.stopPropagation()}
+          onChange={e => onNameChange(e.target.value)}
+          style={{
+            flex: 1,
+            fontSize: 12, fontWeight: 600,
+            border: "none", background: "transparent", outline: "none",
+            color: "var(--text)", padding: 0,
+            cursor: "text",
+          }}
+        />
+
+        {/* Icône drag (pointillés) */}
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ opacity: 0.3, flexShrink: 0 }}>
+          <circle cx="3.5" cy="3.5" r="1.2" fill="currentColor"/>
+          <circle cx="8.5" cy="3.5" r="1.2" fill="currentColor"/>
+          <circle cx="3.5" cy="8.5" r="1.2" fill="currentColor"/>
+          <circle cx="8.5" cy="8.5" r="1.2" fill="currentColor"/>
+        </svg>
+
+        {/* Boutons actions */}
+        <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
           <button
             onMouseDown={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}
             onClick={onDelete}
             title="Supprimer ce point"
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "rgba(200,60,60,0.8)", padding: "0 2px", lineHeight: 1 }}
-          >🗑</button>
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              width: 22, height: 22, borderRadius: 5,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "rgba(200,60,60,0.7)", fontSize: 13,
+              transition: "background 0.1s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "rgba(200,60,60,0.1)"}
+            onMouseLeave={e => e.currentTarget.style.background = "none"}
+          >
+            <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+              <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1M6 6.5v4M8 6.5v4M3 3.5l.7 7.2A1 1 0 004.7 12h4.6a1 1 0 001-.8L11 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </button>
           <button
             onMouseDown={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}
             onClick={onClose}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: "var(--text-muted)", padding: "0 2px", lineHeight: 1 }}
+            title="Fermer"
+            style={{
+              background: "none", border: "none", cursor: "pointer",
+              width: 22, height: 22, borderRadius: 5,
+              display: "flex", alignItems: "center", justifyContent: "center",
+              color: "var(--text-muted)", fontSize: 16, lineHeight: 1,
+              transition: "background 0.1s",
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = "var(--bg-card)"}
+            onMouseLeave={e => e.currentTarget.style.background = "none"}
           >×</button>
         </div>
       </div>
 
-      {/* Corps */}
-      <div style={{ padding: "6px 8px" }}>
-        {/* Nom */}
-        <input
-          type="text"
-          placeholder={`Nom Point #${index + 1}`}
-          value={pt.name || ""}
-          onMouseDown={e => e.stopPropagation()}
-          onChange={e => onNameChange(e.target.value)}
-          style={{
-            width: "100%", fontSize: 11, padding: "3px 6px", borderRadius: 4,
-            border: "0.5px solid var(--border)", background: "var(--bg)", color: "var(--text)",
-            boxSizing: "border-box", marginBottom: 6, outline: "none",
-          }}
-        />
+      {/* ── Corps ── */}
+      <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
 
-        {/* Coordonnées */}
-        <div style={{ display: "flex", gap: 10, marginBottom: 6 }}>
-          <div style={{ color: "var(--text-muted)" }}>x = <span style={{ fontWeight: 500, color: "var(--text)" }}>{pt.x.toFixed(4)}</span></div>
-          <div style={{ color: "var(--text-muted)" }}>y = <span style={{ fontWeight: 500, color: "var(--text)" }}>{pt.y.toFixed(4)}</span></div>
+        {/* Coordonnées CIE xy */}
+        <div style={{
+          display: "grid", gridTemplateColumns: "1fr 1fr",
+          gap: 6,
+        }}>
+          {[["x", pt.x], ["y", pt.y]].map(([axis, val]) => (
+            <div key={axis} style={{
+              background: "var(--bg)",
+              border: "1px solid var(--border)",
+              borderRadius: 7,
+              padding: "6px 10px",
+              textAlign: "center",
+            }}>
+              <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>{axis}</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
+                {val.toFixed(4)}
+              </div>
+            </div>
+          ))}
         </div>
 
-        {/* Bouton Saturation ou résultat */}
+        {/* Saturation */}
         {!pt.showSat ? (
           <button
             onMouseDown={e => e.stopPropagation()}
+            onTouchStart={e => e.stopPropagation()}
             onClick={onToggleSat}
             style={{
-              width: "100%", fontSize: 11, fontWeight: 600, padding: "6px 0", borderRadius: 5,
-              cursor: "pointer", letterSpacing: "0.02em",
-              border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)",
-              transition: "all 0.15s",
+              width: "100%", fontSize: 12, fontWeight: 600,
+              padding: "8px 0", borderRadius: 7, cursor: "pointer",
+              border: "1px solid var(--border)",
+              background: "var(--bg)", color: "var(--text)",
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              transition: "background 0.15s, border-color 0.15s",
             }}
-          >◎ Saturation</button>
+            onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-card)"; e.currentTarget.style.borderColor = "var(--text-muted)"; }}
+            onMouseLeave={e => { e.currentTarget.style.background = "var(--bg)"; e.currentTarget.style.borderColor = "var(--border)"; }}
+          >
+            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+              <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
+              <circle cx="6.5" cy="6.5" r="2" stroke="currentColor" strokeWidth="1.3"/>
+            </svg>
+            Saturation
+          </button>
         ) : s ? (
-          <div style={{ borderTop: "0.5px solid var(--border)", paddingTop: 6 }}>
-            <div style={{ color: "var(--text-muted)", marginBottom: 2, fontSize: 10 }}>
-              d₁ = <span style={{ fontWeight: 500, color: "var(--text)" }}>{s.d1}</span>
-              <span style={{ marginLeft: 4 }}>({illuminant} → {pt.name || `#${index + 1}`})</span>
-            </div>
-            <div style={{ color: "var(--text-muted)", marginBottom: 6, fontSize: 10 }}>
-              d₂ = <span style={{ fontWeight: 500, color: "var(--text)" }}>{s.d2}</span>
-              <span style={{ marginLeft: 4 }}>({pt.name || `#${index + 1}`} → locus)</span>
-            </div>
-            {/* Barre de saturation */}
-            {(() => {
-              const satPct = parseFloat(s.sat);
-              const domColor = s.domWl ? nmToRGB(s.domWl) : "rgb(180,180,180)";
-              return (
-                <div style={{ borderRadius: 5, overflow: "hidden", border: "0.5px solid var(--border)", position: "relative", marginBottom: 6 }}>
-                  <button
-                    onMouseDown={e => e.stopPropagation()}
-                    onClick={onToggleSat}
-                    style={{ position: "absolute", top: 3, right: 4, background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", cursor: "pointer", fontSize: 10, color: "white", zIndex: 2, width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
-                  >✕</button>
-                  <div style={{
-                    background: `linear-gradient(to right, ${domColor} 0%, ${domColor} ${satPct}%, rgba(128,128,128,0.2) ${satPct}%, rgba(128,128,128,0.2) 100%)`,
-                    padding: "5px 8px", textAlign: "center", position: "relative",
-                  }}>
-                    <span style={{ fontSize: 10, color: "var(--text-muted)", position: "relative", zIndex: 1 }}>Saturation </span>
-                    <span style={{ fontWeight: 700, fontSize: 14, position: "relative", zIndex: 1, color: "var(--text)" }}>{s.sat}%</span>
-                  </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {/* Distances d1/d2 */}
+            <div style={{
+              background: "var(--bg)", border: "1px solid var(--border)",
+              borderRadius: 7, padding: "8px 10px",
+              display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4,
+            }}>
+              {[
+                ["d₁", s.d1, illuminant ? `${illuminant} → ${pt.name || `#${index+1}`}` : ""],
+                ["d₂", s.d2, `${pt.name || `#${index+1}`} → locus`],
+              ].map(([lbl, val, sub]) => (
+                <div key={lbl}>
+                  <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 1 }}>{lbl}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{val}</div>
+                  <div style={{ fontSize: 9, color: "var(--text-muted)", lineHeight: 1.3, marginTop: 1 }}>{sub}</div>
                 </div>
-              );
-            })()}
-            {/* λ dominante */}
+              ))}
+            </div>
+
+            {/* Barre de saturation avec ✕ */}
+            <div style={{ position: "relative" }}>
+              <button
+                onMouseDown={e => e.stopPropagation()}
+                onTouchStart={e => e.stopPropagation()}
+                onClick={onToggleSat}
+                title="Masquer la saturation"
+                style={{
+                  position: "absolute", top: -6, right: -6, zIndex: 2,
+                  width: 18, height: 18, borderRadius: "50%",
+                  background: "var(--bg-card)", border: "1px solid var(--border)",
+                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, color: "var(--text-muted)", lineHeight: 1,
+                }}
+              >×</button>
+              <div style={{ borderRadius: 7, overflow: "hidden", border: "1px solid var(--border)" }}>
+                {/* Track */}
+                <div style={{ height: 6, background: "var(--bg)", position: "relative" }}>
+                  <div style={{
+                    position: "absolute", left: 0, top: 0, height: "100%",
+                    width: `${satPct}%`,
+                    background: domColor || "var(--text-muted)",
+                    borderRadius: "0 4px 4px 0",
+                    transition: "width 0.4s ease",
+                  }} />
+                </div>
+                {/* Label */}
+                <div style={{
+                  padding: "6px 10px",
+                  background: domColor ? `${domColor}18` : "var(--bg)",
+                  display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4,
+                }}>
+                  <span style={{ fontSize: 22, fontWeight: 800, color: "var(--text)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em" }}>{s.sat}%</span>
+                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>saturation</span>
+                </div>
+              </div>
+            </div>
+
+            {/* λ dominante / complémentaire */}
             {s.domWl !== null && (
-              <div style={{ padding: "3px 6px", background: "var(--bg)", borderRadius: 4, textAlign: "center", borderTop: "0.5px solid var(--border)" }}>
-                <div style={{ color: "var(--text-muted)", fontSize: 10, marginBottom: 1 }}>{s.complementary ? "λ complémentaire" : "λ dominante"}</div>
-                <span style={{ fontWeight: 500, fontSize: 13, color: "var(--text)" }}>{s.domWl} nm</span>
-                {s.complementary && <span style={{ fontSize: 9, color: "var(--text-muted)", display: "block" }}>(pourpre — opposé)</span>}
+              <div style={{
+                background: domColor ? `${domColor}14` : "var(--bg)",
+                border: `1px solid ${domColor ? `${domColor}44` : "var(--border)"}`,
+                borderRadius: 7, padding: "8px 10px",
+                display: "flex", alignItems: "center", justifyContent: "space-between",
+              }}>
+                <div>
+                  <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 2 }}>
+                    {s.complementary ? "λ complémentaire" : "λ dominante"}
+                  </div>
+                  {s.complementary && (
+                    <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 1 }}>(pourpre — opposé)</div>
+                  )}
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  {domColor && (
+                    <div style={{ width: 14, height: 14, borderRadius: 3, background: domColor, flexShrink: 0, border: "1px solid rgba(0,0,0,0.1)" }} />
+                  )}
+                  <span style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
+                    {s.domWl} <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>nm</span>
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Pas d'illuminant sélectionné */}
+            {!illuminant && (
+              <div style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", padding: "4px 0" }}>
+                Sélectionner un illuminant pour calculer la saturation
               </div>
             )}
           </div>
-        ) : null}
+        ) : (
+          <div style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", padding: "4px 0" }}>
+            Sélectionner un illuminant pour calculer la saturation
+          </div>
+        )}
       </div>
     </div>
   );
