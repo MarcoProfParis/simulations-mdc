@@ -135,3 +135,17 @@ code {
   max-width: 100%;
   border-inline: none;
 }
+
+#root.expanded {
+  width: 100% !important;
+  max-width: 100% !important;
+  border-inline: none !important;
+}
+[data-expanded="true"] > div {
+  max-width: none !important;
+  width: 100% !important;
+  box-sizing: border-box;
+}
+[data-expanded="true"] > div > div[style] {
+  max-width: none !important;
+}

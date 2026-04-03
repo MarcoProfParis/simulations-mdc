@@ -31,6 +31,67 @@ function useIsMobile() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   Hook : gestion du mode expanded
+   Injecte / retire une feuille de style dynamique dans <head>
+   pour surcharger tous les maxWidth hardcodés dans les apps.
+───────────────────────────────────────────────────────────────────────────── */
+const EXPAND_STYLE_ID = "mdc-expanded-overrides"
+
+function useExpanded() {
+  const [expanded, setExpanded] = useState(false)
+
+  useEffect(() => {
+    // Classe sur #root pour le border-inline et le max-width de #root lui-même
+    const root = document.getElementById("root")
+    if (root) {
+      root.classList.toggle("expanded", expanded)
+    }
+
+    // Feuille de style dynamique pour surcharger les apps enfants
+    let tag = document.getElementById(EXPAND_STYLE_ID)
+    if (expanded) {
+      if (!tag) {
+        tag = document.createElement("style")
+        tag.id = EXPAND_STYLE_ID
+        document.head.appendChild(tag)
+      }
+      tag.textContent = `
+        /* ── Expanded mode overrides ── */
+        #root.expanded {
+          width: 100% !important;
+          max-width: 100% !important;
+          border-inline: none !important;
+        }
+        /* Neutraliser tous les conteneurs à maxWidth fixe dans les apps */
+        #root.expanded > div > div,
+        #root.expanded > div > div > div,
+        #root.expanded > div > div > div > div {
+          max-width: none !important;
+          box-sizing: border-box;
+        }
+        /* Ré-appliquer un padding horizontal confortable */
+        #root.expanded [style*="margin: 0 auto"],
+        #root.expanded [style*="margin:0 auto"],
+        #root.expanded [style*="margin: 0px auto"] {
+          padding-left: clamp(16px, 2.5vw, 48px) !important;
+          padding-right: clamp(16px, 2.5vw, 48px) !important;
+        }
+      `
+    } else {
+      if (tag) tag.remove()
+    }
+
+    return () => {
+      if (root) root.classList.remove("expanded")
+      const t = document.getElementById(EXPAND_STYLE_ID)
+      if (t) t.remove()
+    }
+  }, [expanded])
+
+  return [expanded, setExpanded]
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    Barre de navigation
 ───────────────────────────────────────────────────────────────────────────── */
 function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark, expanded, setExpanded }) {
@@ -51,7 +112,6 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark, exp
 
   return (
     <>
-      {/* ── Barre principale ── */}
       <nav
         className="sticky top-0 z-50 h-14 flex items-center px-4 md:px-6"
         style={{
@@ -174,7 +234,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark, exp
             style={{
               background: expanded ? "var(--bg)" : "transparent",
               border: `1px solid ${expanded ? "var(--border)" : "transparent"}`,
-              color: "var(--text-muted)",
+              color: expanded ? "var(--text)" : "var(--text-muted)",
             }}
             onMouseEnter={e => {
               e.currentTarget.style.background = "var(--bg)"
@@ -186,7 +246,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark, exp
                 e.currentTarget.style.background = "transparent"
                 e.currentTarget.style.borderColor = "transparent"
               }
-              e.currentTarget.style.color = "var(--text-muted)"
+              e.currentTarget.style.color = expanded ? "var(--text)" : "var(--text-muted)"
             }}
           >
             {expanded
@@ -256,7 +316,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark, exp
         >
           <button
             onClick={() => goTo(null, null)}
-            className="flex items-center gap-3 px-5 py-4 text-[14px] border-0 cursor-pointer text-left transition-colors"
+            className="flex items-center gap-3 px-5 py-4 text-[14px] border-0 cursor-pointer text-left"
             style={{
               background: !categoryId ? "var(--bg)" : "transparent",
               borderBottom: "1px solid var(--border)",
@@ -299,7 +359,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark, exp
                           <button
                             key={app.id}
                             onClick={() => goTo(cat.id, app.id)}
-                            className="flex items-start gap-3 w-full pl-8 pr-5 py-3 text-left border-0 cursor-pointer transition-colors"
+                            className="flex items-start gap-3 w-full pl-8 pr-5 py-3 text-left border-0 cursor-pointer"
                             style={{
                               background: isActive ? `${cat.color}12` : "transparent",
                               borderLeft: isActive ? `3px solid ${cat.color}` : "3px solid transparent",
@@ -361,25 +421,33 @@ function AppCard({ item, accent, onClick }) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
+   Wrapper expanded — enveloppe le rendu de chaque app en mode étendu.
+   Utilise une ref pour surcharger le style inline du premier enfant DOM.
+───────────────────────────────────────────────────────────────────────────── */
+function AppWrapper({ expanded, children }) {
+  return (
+    <div
+      data-expanded={expanded ? "true" : "false"}
+      style={{
+        /* En mode expanded : on devient le conteneur pleine largeur */
+        width: "100%",
+        /* Transition douce */
+        transition: "padding 0.25s ease",
+      }}
+    >
+      {children}
+    </div>
+  )
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
    Composant principal
 ───────────────────────────────────────────────────────────────────────────── */
 export default function App() {
   const [categoryId, setCategoryId] = useState(null)
   const [appId, setAppId]           = useState(null)
   const { dark, setDark }           = useTheme()
-  const [expanded, setExpanded]     = useState(false)
-
-  // Applique / retire la classe "expanded" sur #root pour lever la contrainte de largeur
-  useEffect(() => {
-    const root = document.getElementById("root")
-    if (!root) return
-    if (expanded) {
-      root.classList.add("expanded")
-    } else {
-      root.classList.remove("expanded")
-    }
-    return () => root.classList.remove("expanded")
-  }, [expanded])
+  const [expanded, setExpanded]     = useExpanded()
 
   const nav = (
     <TopNav
@@ -402,7 +470,9 @@ export default function App() {
     return (
       <div>
         {nav}
-        <Component onBack={() => setAppId(null)} />
+        <AppWrapper expanded={expanded}>
+          <Component onBack={() => setAppId(null)} />
+        </AppWrapper>
       </div>
     )
   }
