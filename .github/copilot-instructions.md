@@ -1,67 +1,67 @@
-# Copilot Instructions
+# Instructions Copilot
 
-## Project Overview
+## Présentation du projet
 
-Interactive scientific simulator platform for BTS "Métiers de la Chimie" students. Provides browser-based simulators across two domains:
-- **Colorimetry / Color Spaces** (`src/apps/couleur/`) — CIE xy diagrams, CIELAB explorer
-- **Rheology & Wetting** (`src/apps/rheologie/`) — Rheogram models, contact angle, Zisman line analysis
+Plateforme de simulateurs scientifiques interactifs destinée aux étudiants BTS « Métiers de la Chimie ». Les simulateurs couvrent deux domaines :
+- **Colorimétrie / Espaces couleur** (`src/apps/couleur/`) — diagramme CIE xy, explorateur CIELAB
+- **Rhéologie & Mouillage** (`src/apps/rheologie/`) — modèles de rhéogramme, angle de contact, droite de Zisman
 
-## Commands
+## Commandes
 
 ```bash
-npm run dev       # Start dev server (Vite HMR)
-npm run build     # Production build → dist/
+npm run dev       # Démarrer le serveur de développement (Vite HMR)
+npm run build     # Build de production → dist/
 npm run lint      # ESLint (JS + JSX)
-npm run preview   # Preview production build locally
-npm run deploy    # Build + deploy to GitHub Pages
+npm run preview   # Prévisualiser le build de production en local
+npm run deploy    # Build + déploiement sur GitHub Pages
 ```
 
-No test suite exists in this project.
+Il n'existe pas de suite de tests dans ce projet.
 
 ## Architecture
 
-- **React 19 + Vite** — no React Router; navigation is pure state
-- **Recharts** — all scientific charts/plots
-- **KaTeX** — loaded lazily from CDN for math formula rendering
-- **Lucide-react** — icons
-- **Deployed to GitHub Pages** at base path `/simulations-mdc/` (set in `vite.config.js`)
+- **React 19 + Vite** — pas de React Router ; la navigation est gérée par état React
+- **Recharts** — tous les graphiques et tracés scientifiques
+- **KaTeX** — chargé paresseusement depuis un CDN pour le rendu des formules mathématiques
+- **Lucide-react** — icônes
+- **Déployé sur GitHub Pages** avec le chemin de base `/simulations-mdc/` (défini dans `vite.config.js`)
 
-### Navigation Model
+### Modèle de navigation
 
-`App.jsx` implements a 3-level state machine (no URL routing):
-1. Category selection → sets `categoryId`
-2. App selection within category → sets `appId`
-3. Individual app renders
+`App.jsx` implémente une machine à états à 3 niveaux (sans routage URL) :
+1. Sélection de la catégorie → définit `categoryId`
+2. Sélection de l'application dans la catégorie → définit `appId`
+3. Rendu de l'application individuelle
 
-All app registrations live in `src/config.js` (`CATEGORIES` array), which references component imports directly.
+Toutes les applications sont enregistrées dans `src/config.js` (tableau `CATEGORIES`), qui référence directement les imports de composants.
 
-### Directory Layout
+### Structure des dossiers
 
 ```
 src/
 ├── apps/
-│   ├── couleur/       # Color science simulators
-│   └── rheologie/     # Rheology & wetting simulators
-├── components/ui/     # Reusable UI primitives (Tabs, Select)
-├── App.jsx            # Top-level navigation state machine
-├── ThemeContext.jsx    # Light/dark theme provider
-├── config.js          # App/category registry (CATEGORIES)
-├── index.css          # CSS variables & global theming
-└── main.jsx           # React entry point
+│   ├── couleur/       # Simulateurs de science des couleurs
+│   └── rheologie/     # Simulateurs de rhéologie & mouillage
+├── components/ui/     # Composants UI réutilisables (Tabs, Select)
+├── App.jsx            # Machine à états de navigation principale
+├── ThemeContext.jsx    # Fournisseur de thème clair/sombre
+├── config.js          # Registre des apps/catégories (CATEGORIES)
+├── index.css          # Variables CSS & thème global
+└── main.jsx           # Point d'entrée React
 ```
 
-## Key Conventions
+## Conventions importantes
 
-### Component Structure
+### Structure des composants
 
-App components are **monolithic** (often 1000–2000 lines). Domain constants, helper functions, and sub-components are defined within the same file. Do not split them out unless requested.
+Les composants d'application sont **monolithiques** (souvent 1000 à 2000 lignes). Les constantes métier, fonctions utilitaires et sous-composants sont définis dans le même fichier. Ne pas les séparer sauf demande explicite.
 
-### Styling
+### Styles
 
-Styling uses **CSS variables + inline style objects** — no CSS-in-JS libraries, no Tailwind, no CSS Modules.
+Le style utilise **variables CSS + objets de style inline** — pas de CSS-in-JS, pas de Tailwind, pas de CSS Modules.
 
-- Global CSS tokens (`--text`, `--bg`, `--border`, `--accent`, etc.) are defined in `index.css` and switched via `data-theme` on `<html>`.
-- Many components define a local color token object (conventionally named `T`) for internal use:
+- Les tokens CSS globaux (`--text`, `--bg`, `--border`, `--accent`, etc.) sont définis dans `index.css` et basculés via `data-theme` sur `<html>`.
+- Beaucoup de composants définissent un objet local de tokens couleur (nommé par convention `T`) :
 
 ```jsx
 const T = {
@@ -71,7 +71,7 @@ const T = {
 };
 ```
 
-- Inline styles frequently reference both CSS variables and `T`:
+- Les styles inline combinent souvent variables CSS et objet `T` :
 
 ```jsx
 style={{
@@ -80,13 +80,13 @@ style={{
 }}
 ```
 
-### Theme
+### Thème
 
-Use `useTheme()` from `ThemeContext.jsx` to read `{ dark }`. Theme is persisted to `localStorage` and toggled by setting `data-theme` on `document.documentElement`.
+Utiliser `useTheme()` depuis `ThemeContext.jsx` pour lire `{ dark }`. Le thème est persisté dans `localStorage` et basculé en définissant `data-theme` sur `document.documentElement`.
 
-### UI Primitives
+### Composants UI de base
 
-`src/components/ui/tabs.jsx` and `select.jsx` follow shadcn-style composition using React Context internally:
+`src/components/ui/tabs.jsx` et `select.jsx` suivent une composition de style shadcn avec React Context en interne :
 
 ```jsx
 <Tabs value={tab} onValueChange={setTab}>
@@ -99,17 +99,17 @@ Use `useTheme()` from `ThemeContext.jsx` to read `{ dark }`. Theme is persisted 
 
 ### KaTeX
 
-Apps that render math use a local `useKatex()` hook that lazy-loads KaTeX from CDN and caches it on `window.katex`. Check for the ready state before rendering.
+Les applications qui affichent des formules utilisent un hook local `useKatex()` qui charge KaTeX paresseusement depuis le CDN et le met en cache dans `window.katex`. Vérifier l'état `ready` avant le rendu.
 
-### Constants Naming
+### Nommage des constantes
 
-- Domain data constants: `UPPER_SNAKE_CASE` (e.g., `MODELS`, `ILLUMINANTS`, `SURFACES`, `SOLVANTS`)
-- ESLint is configured to allow unused variables matching `/^[A-Z_]/` — safe to define module-level constants without triggering lint errors
+- Constantes de données métier : `UPPER_SNAKE_CASE` (ex. `MODELS`, `ILLUMINANTS`, `SURFACES`, `SOLVANTS`)
+- ESLint est configuré pour autoriser les variables inutilisées correspondant à `/^[A-Z_]/` — il est sûr de définir des constantes au niveau du module sans déclencher d'erreur lint
 
-### Webhook Integration
+### Intégration Webhook
 
-Some apps (e.g., `ZismanApp.jsx`) send results to an external n8n endpoint. Keep webhook URLs as module-level constants named `WEBHOOK_URL`.
+Certaines applications (ex. `ZismanApp.jsx`) envoient des résultats à un endpoint n8n externe. Conserver les URLs de webhook comme constantes au niveau du module nommées `WEBHOOK_URL`.
 
-### Language
+### Langue
 
-Domain labels and UI strings are in **French** (this is a French-language educational tool). Keep new UI text in French.
+Les libellés métier et les textes d'interface sont en **français**. Tout nouveau texte d'interface doit être rédigé en français.
