@@ -129,7 +129,7 @@ function useCanvasColors(dark) {
   };
 }
 
-const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant, onHover, userPoints = [], onAddPoint, onMovePoint, showReticle = true, onToggleReticle, showPlanckian = false, onTogglePlanckian, macadamFactor = 0, onSetMacadam, showColorFill = true, onToggleColorFill, onDblClickPoint, onClickPoint, onToggleAllSat, allSatOn = false, annotations = [], onAnnotationsChange }, ref) {
+const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant, onHover, userPoints = [], onAddPoint, onMovePoint, showReticle = true, onToggleReticle, showPlanckian = false, onTogglePlanckian, macadamFactor = 0, onSetMacadam, showColorFill = true, onToggleColorFill, onDblClickPoint, onToggleAllSat, allSatOn = false, annotations = [], onAnnotationsChange }, ref) {
   const canvasRef = useRef(null);
   const [hovered, setHovered] = useState(null);
   const { dark } = useTheme();
@@ -540,7 +540,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
 
     // Wavelength tick marks
     const LABEL_NMS = new Set([
-      380, 400, 460, 470, 480, 485, 490, 495, 500, 505, 510, 515, 520,
+      380, 400, 460, 470, 480, 485, 490, 495, 500, 505, 510, 520,
       530, 540, 550, 560, 570, 580, 590, 600, 610, 620, 630, 640, 650, 700
     ]);
     const labeled = LOCUS_380.filter(p => LABEL_NMS.has(p.nm));
@@ -722,27 +722,13 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
     }
     // Simple clic sur zone vide en mode point → afficher le hint
     if (!near && modeRef.current === "point") {
-      const rect2 = canvasRef.current.getBoundingClientRect();
-      const scale2 = W / rect2.width;
-      const cpx2 = (e.clientX - rect2.left) * scale2;
-      const cpy2 = (e.clientY - rect2.top) * scale2;
-      setHint({ cpx: cpx2, cpy: cpy2 });
+      const rect = canvasRef.current.getBoundingClientRect();
+      const scale = W / rect.width;
+      const cpx = (e.clientX - rect.left) * scale;
+      const cpy = (e.clientY - rect.top) * scale;
+      setHint({ cpx, cpy });
       if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
       hintTimerRef.current = setTimeout(() => setHint(null), 2000);
-    }
-    // Clic sur un point existant → ouvrir son popup
-    if (near && modeRef.current === "point" && !dragPointRef.current) {
-      const [vx0,,vx1,] = viewRef.current;
-      const threshold = (vx1 - vx0) * 0.025;
-      let closest = null, bestD = Infinity;
-      userPoints.forEach(pt => {
-        const d = Math.sqrt((pt.x-x)**2+(pt.y-y)**2);
-        if (d < threshold && d < bestD) { bestD = d; closest = pt.id; }
-      });
-      if (closest) {
-        // Coordonnées fenêtre absolues pour positionner le popup en fixed
-        onClickPoint && onClickPoint(closest, e.clientX, e.clientY);
-      }
     }
   };
 
@@ -851,25 +837,12 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
         if (closest) { onDblClickPoint && onDblClickPoint(closest); }
         else { onAddPoint && onAddPoint({ x, y }); }
       } else {
-        // Premier tap → hint si zone vide, popup si point existant
+        // Premier tap → afficher hint
         lastTapRef.current = now;
         const [vx0,,vx1,] = viewRef.current;
         const threshold = (vx1 - vx0) * 0.025;
-        let closestId = null, bestD2 = Infinity;
-        if (userPoints && userPoints.length) {
-          userPoints.forEach(pt => {
-            const d = Math.sqrt((pt.x-x)**2+(pt.y-y)**2);
-            if (d < threshold && d < bestD2) { bestD2 = d; closestId = pt.id; }
-          });
-        }
-        if (closestId) {
-          // Tap sur un point → ouvrir popup (coordonnées fenêtre absolues)
-          const rect4 = canvasRef.current.getBoundingClientRect();
-          const absX = rect4.left + cpx / W * rect4.width;
-          const absY = rect4.top  + cpy / H * rect4.height;
-          onClickPoint && onClickPoint(closestId, absX, absY);
-        } else {
-          // Tap zone vide → hint
+        const near = userPoints && userPoints.some(pt => Math.sqrt((pt.x-x)**2+(pt.y-y)**2) < threshold);
+        if (!near) {
           setHint({ cpx, cpy });
           if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
           hintTimerRef.current = setTimeout(() => setHint(null), 2000);
@@ -884,13 +857,13 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
     background: "var(--bg-card)",
     border: `0.5px solid var(--border)`,
     color: "var(--text)",
-    borderRadius: 10, width: 50, height: 50, cursor: "pointer",
-    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 22,
+    borderRadius: 6, width: 28, height: 28, cursor: "pointer",
+    display: "flex", alignItems: "center", justifyContent: "center", fontSize: 15,
   };
   const btnActive = {
     ...btnBase,
     background: dark ? "rgba(255,255,255,0.12)" : "rgba(20,20,20,0.10)",
-    border: `1.5px solid ${dark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)"}`,
+    border: `1px solid ${dark ? "rgba(255,255,255,0.35)" : "rgba(0,0,0,0.35)"}`,
   };
 
   const [showInfo, setShowInfo] = useState(false);
@@ -926,7 +899,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
         position: "sticky", top: 56, alignSelf: "flex-start", zIndex: 5,
       }}>
         <button title={showReticle ? "Masquer le réticule" : "Afficher le réticule"} onClick={() => onToggleReticle && onToggleReticle()} style={showReticle ? btnActive : btnBase}>
-          <svg width="26" height="26" viewBox="0 0 16 16" fill="none">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <circle cx="8" cy="8" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
             <line x1="8" y1="1" x2="8" y2="15" stroke="currentColor" strokeWidth="1.3"/>
             <line x1="1" y1="8" x2="15" y2="8" stroke="currentColor" strokeWidth="1.3"/>
@@ -936,14 +909,14 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
         <button
           title={showPlanckian ? "Masquer le locus des corps noirs" : "Afficher le locus des corps noirs (K)"}
           onClick={() => onTogglePlanckian && onTogglePlanckian()}
-          style={{ ...(showPlanckian ? { ...btnActive, border: "1.5px solid rgba(180,80,0,0.6)", background: dark ? "rgba(180,80,0,0.25)" : "rgba(180,80,0,0.12)" } : btnBase), flexDirection: "column", height: 56, gap: 2 }}
+          style={{ ...(showPlanckian ? { ...btnActive, border: "1px solid rgba(180,80,0,0.6)", background: dark ? "rgba(180,80,0,0.25)" : "rgba(180,80,0,0.12)" } : btnBase), flexDirection: "column", height: 34, gap: 1 }}
         >
-          <svg width="26" height="20" viewBox="0 0 16 16" fill="none">
+          <svg width="16" height="12" viewBox="0 0 16 16" fill="none">
             <path d="M2 13 Q4 10 6 8 Q9 5 14 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             <circle cx="6" cy="8" r="1.5" fill="currentColor" opacity="0.6"/>
             <circle cx="10" cy="5.5" r="1.5" fill="currentColor" opacity="0.6"/>
           </svg>
-          <span style={{ fontSize: 13, fontWeight: 700, lineHeight: 1, letterSpacing: "0.02em" }}>K</span>
+          <span style={{ fontSize: 8, fontWeight: 700, lineHeight: 1, letterSpacing: "0.02em" }}>K</span>
         </button>
 
         <button
@@ -954,7 +927,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
             : { ...btnBase, background: dark ? "rgba(255,255,255,0.07)" : "rgba(200,200,200,0.3)" }}
         >
           {showColorFill ? (
-            <svg width="50" height="50" viewBox="0 0 28 28" fill="none" style={{ margin: "-6px" }}>
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none" style={{ margin: "-6px" }}>
               <defs>
                 <linearGradient id="cgOn" x1="0" y1="0" x2="1" y2="1">
                   <stop offset="0%" stopColor="#ff2200"/>
@@ -969,7 +942,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
               <path d="M4 24 Q14 4 24 24" stroke="rgba(0,0,0,0.5)" strokeWidth="1.5" fill="none"/>
             </svg>
           ) : (
-            <svg width="26" height="26" viewBox="0 0 16 16" fill="none">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
               <path d="M2 14 Q8 2 14 14 Z" fill="currentColor" opacity="0.25"/>
               <path d="M2 14 Q8 2 14 14" stroke="currentColor" strokeWidth="1.3" fill="none" opacity="0.6"/>
               <line x1="3" y1="3" x2="13" y2="13" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" opacity="0.7"/>
@@ -977,7 +950,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
           )}
         </button>
 
-        <div style={{ borderTop: `0.5px solid var(--border)`, margin: "4px 0" }} />
+        <div style={{ borderTop: `0.5px solid var(--border)`, margin: "2px 0" }} />
 
         <div style={{ position: "relative" }}>
           <div ref={macadamRef}>
@@ -986,13 +959,13 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
               onClick={() => setMacadamOpen(v => !v)}
               style={macadamFactor > 0 ? btnActive : btnBase}
             >
-              <svg width="26" height="26" viewBox="0 0 16 16" fill="none">
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
                 <ellipse cx="8" cy="8" rx="6" ry="3.5" stroke="currentColor" strokeWidth="1.3" transform="rotate(-30 8 8)"/>
                 <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
               </svg>
             </button>
             {macadamOpen && (
-              <div style={{ position: "absolute", left: 58, top: 0, zIndex: 10, borderRadius: 8, padding: "8px 10px", whiteSpace: "nowrap", ...popupStyle }}>
+              <div style={{ position: "absolute", left: 34, top: 0, zIndex: 10, borderRadius: 8, padding: "8px 10px", whiteSpace: "nowrap", ...popupStyle }}>
                 <p style={{ fontSize: 10, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em", color: "var(--text-muted)", margin: "0 0 6px" }}>Tolérance colorimétrique</p>
                 <div style={{ display: "flex", gap: 4 }}>
                   {[0, 1, 2, 5, 10].map(f => (
@@ -1012,38 +985,38 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
         <button
           title={allSatOn ? "Masquer toutes les saturations" : "Activer toutes les saturations"}
           onClick={() => onToggleAllSat && onToggleAllSat()}
-          style={allSatOn ? { ...btnActive, fontSize: 20, fontWeight: 700 } : { ...btnBase, fontSize: 20, fontWeight: 700 }}
+          style={allSatOn ? { ...btnActive, fontSize: 13, fontWeight: 700 } : { ...btnBase, fontSize: 13, fontWeight: 700 }}
         >%</button>
 
-        <div style={{ borderTop: `0.5px solid var(--border)`, margin: "4px 0" }} />
+        <div style={{ borderTop: `0.5px solid var(--border)`, margin: "2px 0" }} />
 
         <button title="Dessiner (crayon)" onClick={() => switchMode(mode === "draw" ? "point" : "draw")} style={mode === "draw" ? btnActive : btnBase}>
-          <svg width="24" height="24" viewBox="0 0 15 15" fill="none">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
             <path d="M11 2 L13 4 L5 12 L2 13 L3 10 Z" stroke="currentColor" strokeWidth="1.3" strokeLinejoin="round"/>
             <line x1="9" y1="4" x2="11" y2="6" stroke="currentColor" strokeWidth="1.3"/>
           </svg>
         </button>
         <button title="Ajouter du texte" onClick={() => switchMode(mode === "text" ? "point" : "text")} style={mode === "text" ? btnActive : btnBase}>
-          <svg width="24" height="24" viewBox="0 0 15 15" fill="none">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
             <text x="2" y="12" fontSize="11" fontWeight="bold" fill="currentColor">T</text>
           </svg>
         </button>
         {annotations.length > 0 && (
-          <button title="Effacer les annotations" onClick={() => onAnnotationsChange && onAnnotationsChange(() => [])} style={{ ...btnBase }}>
-            <svg width="22" height="22" viewBox="0 0 14 14" fill="none">
+          <button title="Effacer les annotations" onClick={() => onAnnotationsChange && onAnnotationsChange(() => [])} style={{ ...btnBase, fontSize: 11 }}>
+            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
               <line x1="2" y1="2" x2="12" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
               <line x1="12" y1="2" x2="2" y2="12" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
             </svg>
           </button>
         )}
 
-        <div style={{ borderTop: `0.5px solid var(--border)`, margin: "4px 0" }} />
+        <div style={{ borderTop: `0.5px solid var(--border)`, margin: "2px 0" }} />
 
         <div style={{ position: "relative" }} ref={infoRef}>
-          <button title="Aide" onClick={() => setShowInfo(v => !v)} style={{ ...( showInfo ? btnActive : btnBase ), fontSize: 18, fontWeight: 600 }}>?</button>
+          <button title="Aide" onClick={() => setShowInfo(v => !v)} style={showInfo ? btnActive : btnBase}>?</button>
           {showInfo && (
             <div style={{
-              position: "absolute", left: 58, top: 0, zIndex: 10,
+              position: "absolute", left: 34, top: 0, zIndex: 10,
               borderRadius: 8, padding: "12px 14px", width: 240, fontSize: 12, lineHeight: 1.6,
               ...popupStyle,
             }}>
@@ -1076,15 +1049,15 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
           <button
             onClick={zoomOut}
             title="Dézoomer"
-            style={{ ...btnBase, fontSize: 26, fontWeight: 300, lineHeight: 1 }}
+            style={{ ...btnBase, fontSize: 18, fontWeight: 300, lineHeight: 1 }}
           >−</button>
           <button
             onClick={zoomIn}
             title="Zoomer"
-            style={{ ...btnBase, fontSize: 26, fontWeight: 300, lineHeight: 1 }}
+            style={{ ...btnBase, fontSize: 18, fontWeight: 300, lineHeight: 1 }}
           >+</button>
           <span style={{
-            fontSize: 12, fontWeight: 600, minWidth: 40, textAlign: "center",
+            fontSize: 11, fontWeight: 600, minWidth: 36, textAlign: "center",
             color: "var(--text-muted)", fontVariantNumeric: "tabular-nums",
           }}>
             ×{zoomLevel.toFixed(zoomLevel < 10 ? 1 : 0)}
@@ -1093,7 +1066,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
             <button
               onClick={resetZoom}
               title="Réinitialiser le zoom"
-              style={{ ...btnBase, fontSize: 12, fontWeight: 600, width: "auto", padding: "0 10px", color: "var(--text-muted)" }}
+              style={{ ...btnBase, fontSize: 11, fontWeight: 600, width: "auto", padding: "0 8px", color: "var(--text-muted)" }}
             >↺ ×1</button>
           )}
         </div>
@@ -1210,172 +1183,6 @@ function computeSaturation(pt, illuminantKey) {
   return { d1: d1.toFixed(5), d2: d2.toFixed(5), sat: sat.toFixed(1), domWl: domWl !== null ? Math.round(domWl) : null, complementary };
 }
 
-// ── Popup flottant draggable par point ───────────────────────────────────────
-function PointPopup({ pt, screenX, screenY, index, illuminant, onClose, onMove, onNameChange, onToggleSat, onDelete }) {
-  const offsetRef = useRef({ x: 0, y: 0 });
-  const [pos, setPos]           = useState({ x: screenX, y: screenY });
-  const [dragging, setDragging] = useState(false);
-
-  const startDrag = (clientX, clientY) => {
-    offsetRef.current = { x: clientX - pos.x, y: clientY - pos.y };
-    setDragging(true);
-  };
-  const onMouseDown = (e) => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return; e.preventDefault(); startDrag(e.clientX, e.clientY); };
-  const onTouchDown = (e) => { if (e.target.tagName === 'INPUT' || e.target.tagName === 'BUTTON') return; const t = e.touches[0]; startDrag(t.clientX, t.clientY); };
-
-  useEffect(() => {
-    if (!dragging) return;
-    const onMove_ = (e) => {
-      const cx = e.clientX ?? e.touches?.[0]?.clientX;
-      const cy = e.clientY ?? e.touches?.[0]?.clientY;
-      if (cx == null) return;
-      const nx = cx - offsetRef.current.x;
-      const ny = cy - offsetRef.current.y;
-      setPos({ x: nx, y: ny });
-      onMove(nx, ny);
-    };
-    const onUp = () => setDragging(false);
-    document.addEventListener('mousemove', onMove_);
-    document.addEventListener('mouseup',   onUp);
-    document.addEventListener('touchmove', onMove_, { passive: true });
-    document.addEventListener('touchend',  onUp);
-    return () => {
-      document.removeEventListener('mousemove', onMove_);
-      document.removeEventListener('mouseup',   onUp);
-      document.removeEventListener('touchmove', onMove_);
-      document.removeEventListener('touchend',  onUp);
-    };
-  }, [dragging, onMove]);
-
-  const s = illuminant ? computeSaturation(pt, illuminant) : null;
-
-  return (
-    <div
-      ref={dragRef}
-      onMouseDown={onMouseDown}
-      onTouchStart={onTouchDown}
-      style={{
-        position: "fixed",
-        left: pos.x, top: pos.y,
-        zIndex: 200,
-        width: 210,
-        background: "var(--bg-card)",
-        border: "0.5px solid var(--border)",
-        borderRadius: 8,
-        boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
-        fontSize: 11,
-        userSelect: "none",
-        touchAction: "none",
-        cursor: dragging ? "grabbing" : "grab",
-      }}
-    >
-      {/* Handle de drag — barre supérieure */}
-      <div style={{
-        display: "flex", justifyContent: "space-between", alignItems: "center",
-        padding: "5px 8px 4px",
-        borderBottom: "0.5px solid var(--border)",
-        background: "var(--bg)",
-        borderRadius: "8px 8px 0 0",
-        cursor: "grab",
-      }}>
-        <span style={{ fontWeight: 600, fontSize: 12, color: "var(--text-muted)" }}>
-          {pt.name || `#${index + 1}`}
-        </span>
-        <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
-          <button
-            onMouseDown={e => e.stopPropagation()}
-            onClick={onDelete}
-            title="Supprimer ce point"
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 12, color: "rgba(200,60,60,0.8)", padding: "0 2px", lineHeight: 1 }}
-          >🗑</button>
-          <button
-            onMouseDown={e => e.stopPropagation()}
-            onClick={onClose}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: 15, color: "var(--text-muted)", padding: "0 2px", lineHeight: 1 }}
-          >×</button>
-        </div>
-      </div>
-
-      {/* Corps */}
-      <div style={{ padding: "6px 8px" }}>
-        {/* Nom */}
-        <input
-          type="text"
-          placeholder={`Nom Point #${index + 1}`}
-          value={pt.name || ""}
-          onMouseDown={e => e.stopPropagation()}
-          onChange={e => onNameChange(e.target.value)}
-          style={{
-            width: "100%", fontSize: 11, padding: "3px 6px", borderRadius: 4,
-            border: "0.5px solid var(--border)", background: "var(--bg)", color: "var(--text)",
-            boxSizing: "border-box", marginBottom: 6, outline: "none",
-          }}
-        />
-
-        {/* Coordonnées */}
-        <div style={{ display: "flex", gap: 10, marginBottom: 6 }}>
-          <div style={{ color: "var(--text-muted)" }}>x = <span style={{ fontWeight: 500, color: "var(--text)" }}>{pt.x.toFixed(4)}</span></div>
-          <div style={{ color: "var(--text-muted)" }}>y = <span style={{ fontWeight: 500, color: "var(--text)" }}>{pt.y.toFixed(4)}</span></div>
-        </div>
-
-        {/* Bouton Saturation ou résultat */}
-        {!pt.showSat ? (
-          <button
-            onMouseDown={e => e.stopPropagation()}
-            onClick={onToggleSat}
-            style={{
-              width: "100%", fontSize: 11, fontWeight: 600, padding: "6px 0", borderRadius: 5,
-              cursor: "pointer", letterSpacing: "0.02em",
-              border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)",
-              transition: "all 0.15s",
-            }}
-          >◎ Saturation</button>
-        ) : s ? (
-          <div style={{ borderTop: "0.5px solid var(--border)", paddingTop: 6 }}>
-            <div style={{ color: "var(--text-muted)", marginBottom: 2, fontSize: 10 }}>
-              d₁ = <span style={{ fontWeight: 500, color: "var(--text)" }}>{s.d1}</span>
-              <span style={{ marginLeft: 4 }}>({illuminant} → {pt.name || `#${index + 1}`})</span>
-            </div>
-            <div style={{ color: "var(--text-muted)", marginBottom: 6, fontSize: 10 }}>
-              d₂ = <span style={{ fontWeight: 500, color: "var(--text)" }}>{s.d2}</span>
-              <span style={{ marginLeft: 4 }}>({pt.name || `#${index + 1}`} → locus)</span>
-            </div>
-            {/* Barre de saturation */}
-            {(() => {
-              const satPct = parseFloat(s.sat);
-              const domColor = s.domWl ? nmToRGB(s.domWl) : "rgb(180,180,180)";
-              return (
-                <div style={{ borderRadius: 5, overflow: "hidden", border: "0.5px solid var(--border)", position: "relative", marginBottom: 6 }}>
-                  <button
-                    onMouseDown={e => e.stopPropagation()}
-                    onClick={onToggleSat}
-                    style={{ position: "absolute", top: 3, right: 4, background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", cursor: "pointer", fontSize: 10, color: "white", zIndex: 2, width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}
-                  >✕</button>
-                  <div style={{
-                    background: `linear-gradient(to right, ${domColor} 0%, ${domColor} ${satPct}%, rgba(128,128,128,0.2) ${satPct}%, rgba(128,128,128,0.2) 100%)`,
-                    padding: "5px 8px", textAlign: "center", position: "relative",
-                  }}>
-                    <span style={{ fontSize: 10, color: "var(--text-muted)", position: "relative", zIndex: 1 }}>Saturation </span>
-                    <span style={{ fontWeight: 700, fontSize: 14, position: "relative", zIndex: 1, color: "var(--text)" }}>{s.sat}%</span>
-                  </div>
-                </div>
-              );
-            })()}
-            {/* λ dominante */}
-            {s.domWl !== null && (
-              <div style={{ padding: "3px 6px", background: "var(--bg)", borderRadius: 4, textAlign: "center", borderTop: "0.5px solid var(--border)" }}>
-                <div style={{ color: "var(--text-muted)", fontSize: 10, marginBottom: 1 }}>{s.complementary ? "λ complémentaire" : "λ dominante"}</div>
-                <span style={{ fontWeight: 500, fontSize: 13, color: "var(--text)" }}>{s.domWl} nm</span>
-                {s.complementary && <span style={{ fontSize: 9, color: "var(--text-muted)", display: "block" }}>(pourpre — opposé)</span>}
-              </div>
-            )}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
 // ── Composant principal ───────────────────────────────────────────────────────
 export default function AppCouleur() {
   const [illuminant, setIlluminant] = useState("D65");
@@ -1387,17 +1194,15 @@ export default function AppCouleur() {
   const setPointName = (id, name) => setUserPoints(prev => prev.map(p => p.id === id ? { ...p, name } : p));
   const [showReticle, setShowReticle] = useState(true);
   const [showPlanckian, setShowPlanckian] = useState(false);
-  // Popups flottants déplaçables — un par point ouvert
-  const [pointPopups, setPointPopups] = useState([]); // [{ id, x, y }]
-  const closePopup = (id) => setPointPopups(prev => prev.filter(p => p.id !== id));
-  const movePopup  = (id, x, y) => setPointPopups(prev => prev.map(p => p.id === id ? { ...p, x, y } : p));
-  // Conserver popupPointId pour la compatibilité avec onDblClickPoint (ouvre le même popup)
-  const setPopupPointId = (id) => {
-    setPointPopups(prev => {
-      if (prev.find(p => p.id === id)) return prev;
-      return [...prev, { id, x: window.innerWidth / 2 - 110, y: window.innerHeight / 2 - 100 }];
-    });
-  };
+  const [popupPointId, setPopupPointId] = useState(null);
+  const popupRef = useRef(null);
+  const { dark } = useTheme();
+  useEffect(() => {
+    if (!popupPointId) return;
+    const handler = (e) => { if (popupRef.current && !popupRef.current.contains(e.target)) setPopupPointId(null); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [popupPointId]);
   const [macadamFactor, setMacadamFactor] = useState(0);
   const [showColorFill, setShowColorFill] = useState(true);
   const [showSidebar, setShowSidebar] = useState(true);
@@ -1516,8 +1321,8 @@ export default function AppCouleur() {
 
       {tab === "diagram" && (
         <div>
-          {/* Barre illuminants */}
-          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 12, padding: "10px 16px", background: "var(--bg-card)", borderRadius: 8, border: `1px solid var(--border)`, flexWrap: "wrap" }}>
+          {/* Barre illuminants sticky */}
+          <div style={{ position: "sticky", top: 56, zIndex: 10, display: "flex", alignItems: "center", gap: 16, marginBottom: 12, padding: "10px 16px", background: "var(--bg-card)", borderRadius: 8, border: `1px solid var(--border)`, flexWrap: "wrap" }}>
             <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em" }}>Illuminant</span>
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "center" }}>
               {[...Object.entries(ILLUMINANTS), ["", { label: "Aucun" }]].map(([k, v]) => (
@@ -1538,7 +1343,7 @@ export default function AppCouleur() {
 
           {/* Ligne principale */}
           <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
-            <div style={{ flex: "1 1 0", minWidth: 0, position: "relative" }} data-canvas-wrapper="1">
+            <div style={{ flex: "1 1 0", minWidth: 0, position: "relative" }}>
               <button
                 onClick={() => setShowSidebar(v => !v)}
                 title={showSidebar ? "Masquer le panneau" : "Afficher le panneau"}
@@ -1564,16 +1369,6 @@ export default function AppCouleur() {
                 showColorFill={showColorFill}
                 onToggleColorFill={() => setShowColorFill(v => !v)}
                 onDblClickPoint={(id) => setPopupPointId(id)}
-                onClickPoint={(id, clientX, clientY) => {
-                  setPointPopups(prev => {
-                    if (prev.find(p => p.id === id)) return prev; // déjà ouvert
-                    return [...prev, {
-                      id,
-                      x: clientX + 16,
-                      y: clientY - 30,
-                    }];
-                  });
-                }}
                 allSatOn={userPoints.length > 0 && userPoints.every(p => p.showSat)}
                 annotations={annotations}
                 onAnnotationsChange={setAnnotations}
@@ -1583,40 +1378,137 @@ export default function AppCouleur() {
               />
             </div>
 
-            {/* Panneau points — droite : liste compacte, le détail est dans les popups */}
+            {/* Popup double-clic */}
+            {popupPointId && (() => {
+              const pt = userPoints.find(p => p.id === popupPointId);
+              if (!pt) return null;
+              const i = userPoints.indexOf(pt);
+              const s = illuminant ? computeSaturation(pt, illuminant) : null;
+              return (
+                <div ref={popupRef} style={{
+                  position: "absolute", top: 40, left: "50%", transform: "translateX(-50%)", zIndex: 20,
+                  background: "var(--bg-card)", border: `1px solid var(--border)`,
+                  borderRadius: 8, padding: "12px 14px", minWidth: 210, maxWidth: 250,
+                  boxShadow: "0 8px 32px rgba(0,0,0,0.18)", fontSize: 12, color: "var(--text)",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <span style={{ fontWeight: 600, fontSize: 14 }}>{pt.name || ("#" + (i+1))}</span>
+                    <button onClick={() => setPopupPointId(null)} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 16, color: "var(--text-muted)", padding: 0, lineHeight: 1 }}>×</button>
+                  </div>
+                  <input type="text" placeholder={"Nom Point #" + (i+1)} value={pt.name || ""}
+                    onChange={e => setUserPoints(prev => prev.map(p => p.id === pt.id ? {...p, name: e.target.value} : p))}
+                    style={{ width: "100%", fontSize: 11, padding: "3px 6px", borderRadius: 4, border: `0.5px solid var(--border)`, background: "var(--bg)", color: "var(--text)", boxSizing: "border-box", marginBottom: 8 }}
+                  />
+                  <div style={{ display: "flex", gap: 12, marginBottom: 6, color: "var(--text-muted)", fontSize: 12 }}>
+                    <div>y = <strong style={{ color: "var(--text)" }}>{pt.y.toFixed(4)}</strong></div>
+                    <div>x = <strong style={{ color: "var(--text)" }}>{pt.x.toFixed(4)}</strong></div>
+                  </div>
+                  {!pt.showSat && (
+                    <button onClick={() => setUserPoints(prev => prev.map(p => p.id === pt.id ? {...p, showSat: true} : p))}
+                      style={{ width: "100%", fontSize: 11, fontWeight: 600, padding: "6px 0", borderRadius: 5, cursor: "pointer",
+                        border: `1px solid var(--border)`, background: "var(--bg)", color: "var(--text)", marginBottom: 6 }}>
+                      ◎ Saturation
+                    </button>
+                  )}
+                  {pt.showSat && s && (() => {
+                    const satPct = parseFloat(s.sat);
+                    const domColor = s.domWl ? nmToRGB(s.domWl) : "rgb(180,180,180)";
+                    return (
+                      <div style={{ marginTop: 4 }}>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>
+                          d₁ = <strong style={{ color: "var(--text)" }}>{s.d1}</strong> <span>({illuminant} → {pt.name || "#"+(i+1)})</span>
+                        </div>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 6 }}>
+                          d₂ = <strong style={{ color: "var(--text)" }}>{s.d2}</strong> <span>({pt.name || "#"+(i+1)} → locus)</span>
+                        </div>
+                        <div style={{ borderRadius: 5, overflow: "hidden", border: `0.5px solid var(--border)`, position: "relative", marginBottom: 6 }}>
+                          <button onClick={() => setUserPoints(prev => prev.map(p => p.id === pt.id ? {...p, showSat: false} : p))}
+                            style={{ position: "absolute", top: 3, right: 4, background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", cursor: "pointer", fontSize: 10, lineHeight: 1, color: "white", zIndex: 2, padding: "2px 3px", display: "flex", alignItems: "center", justifyContent: "center", width: 16, height: 16 }}>✕</button>
+                          <div style={{ background: `linear-gradient(to right, ${domColor} 0%, ${domColor} ${satPct}%, rgba(128,128,128,0.2) ${satPct}%, rgba(128,128,128,0.2) 100%)`, padding: "5px 8px", textAlign: "center", position: "relative" }}>
+                            <span style={{ fontSize: 10, color: "var(--text-muted)", position: "relative", zIndex: 1 }}>Saturation </span>
+                            <span style={{ fontWeight: 700, fontSize: 14, position: "relative", zIndex: 1, color: "var(--text)" }}>{s.sat}%</span>
+                          </div>
+                        </div>
+                        {s.domWl !== null && (
+                          <div style={{ padding: "4px 6px", background: "var(--bg)", borderRadius: 4, textAlign: "center" }}>
+                            <div style={{ color: "var(--text-muted)", fontSize: 10 }}>{s.complementary ? "λ complémentaire" : "λ dominante"}</div>
+                            <strong style={{ fontSize: 14, color: "var(--text)" }}>{s.domWl} nm</strong>
+                            {s.complementary && <span style={{ fontSize: 9, color: "var(--text-muted)", display: "block" }}>(pourpre — opposé)</span>}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              );
+            })()}
+
+            {/* Panneau points — droite */}
             {showSidebar && (
-              <div style={{ width: 180, flexShrink: 0, display: "flex", flexDirection: "column", gap: 6, maxHeight: 780, overflowY: "auto" }}>
-                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 2px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Points</p>
+              <div style={{ width: 200, flexShrink: 0, display: "flex", flexDirection: "column", gap: 8, maxHeight: 780, overflowY: "auto" }}>
+                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.05em" }}>Points ajoutés</p>
                 {userPoints.length === 0 ? (
-                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>Double-cliquez sur le diagramme pour ajouter un point</p>
+                  <p style={{ fontSize: 12, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>Cliquez sur le diagramme pour ajouter un point</p>
                 ) : (
                   <>
-                    <button onClick={() => { setUserPoints([]); setPointPopups([]); }}
-                      style={{ fontSize: 11, fontWeight: 600, background: "rgba(220,50,50,0.08)", border: "1px solid rgba(200,40,40,0.3)", borderRadius: 5, padding: "4px 8px", cursor: "pointer", alignSelf: "stretch", color: "rgba(200,60,60,0.9)" }}
-                    >✕ Tout effacer</button>
+                    <button onClick={() => setUserPoints([])} style={{ fontSize: 11, fontWeight: 600, background: "rgba(220,50,50,0.08)", border: "1px solid rgba(200,40,40,0.3)", borderRadius: 5, padding: "5px 10px", cursor: "pointer", alignSelf: "stretch", color: "rgba(200,60,60,0.9)" }}>✕ Tout effacer</button>
                     {[...userPoints].reverse().map((pt, ri) => {
                       const i = userPoints.length - 1 - ri;
-                      const isOpen = pointPopups.some(p => p.id === pt.id);
                       return (
-                        <button
-                          key={pt.id}
-                          onClick={() => setPopupPointId(pt.id)}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8, width: "100%",
-                            padding: "5px 8px", borderRadius: 6, cursor: "pointer", textAlign: "left",
-                            background: isOpen ? "var(--bg)" : "var(--bg-card)",
-                            border: isOpen ? `1px solid var(--border)` : `0.5px solid var(--border)`,
-                            boxShadow: isOpen ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-                          }}
-                        >
-                          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", minWidth: 20 }}>#{i+1}</span>
-                          <div style={{ flex: 1, overflow: "hidden" }}>
-                            <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {pt.name || `x ${pt.x.toFixed(3)}`}
-                            </div>
-                            <div style={{ fontSize: 10, color: "var(--text-muted)" }}>y = {pt.y.toFixed(4)}</div>
+                        <div key={pt.id} style={{ background: "var(--bg-card)", border: pt.showSat ? `1px solid var(--text-muted)` : `0.5px solid var(--border)`, borderRadius: 6, padding: "6px 8px", fontSize: 11 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                            <span style={{ fontWeight: 500, fontSize: 12, color: "var(--text-muted)" }}>#{i + 1}</span>
+                            <button onClick={() => setUserPoints(prev => prev.filter(p => p.id !== pt.id))} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 14, color: "var(--text-muted)", padding: "0 2px", lineHeight: 1 }}>×</button>
                           </div>
-                        </button>
+                          <input type="text" placeholder={"Nom Point #" + (i + 1)} value={pt.name || ""}
+                            onChange={e => setPointName(pt.id, e.target.value)}
+                            style={{ width: "100%", fontSize: 11, padding: "3px 6px", borderRadius: 4, border: `0.5px solid var(--border)`, background: "var(--bg)", color: "var(--text)", boxSizing: "border-box", marginBottom: 4 }}
+                          />
+                          <div style={{ display: "flex", gap: 10, marginBottom: 5 }}>
+                            <div style={{ color: "var(--text-muted)" }}>y = <span style={{ fontWeight: 500, color: "var(--text)" }}>{pt.y.toFixed(4)}</span></div>
+                            <div style={{ color: "var(--text-muted)" }}>x = <span style={{ fontWeight: 500, color: "var(--text)" }}>{pt.x.toFixed(4)}</span></div>
+                          </div>
+                          {!pt.showSat && (
+                            <button onClick={() => toggleSat(pt.id)}
+                              style={{ width: "100%", fontSize: 11, fontWeight: 600, padding: "6px 0", borderRadius: 5, cursor: "pointer", letterSpacing: "0.02em", border: `1px solid var(--border)`, background: "var(--bg)", color: "var(--text)", transition: "all 0.15s" }}
+                            >◎ Saturation</button>
+                          )}
+                          {pt.showSat && illuminant && (() => {
+                            const s = computeSaturation(pt, illuminant);
+                            if (!s) return null;
+                            const satPct = parseFloat(s.sat);
+                            const domColor = s.domWl ? nmToRGB(s.domWl) : "rgb(180,180,180)";
+                            return (
+                              <div style={{ marginTop: 5, paddingTop: 5, borderTop: `0.5px solid var(--border)` }}>
+                                <div style={{ color: "var(--text-muted)", marginBottom: 2, fontSize: 10 }}>
+                                  d₁ = <span style={{ fontWeight: 500, color: "var(--text)" }}>{s.d1}</span>
+                                  <span style={{ marginLeft: 4 }}>({illuminant} → {pt.name || ("#"+(userPoints.indexOf(pt)+1))})</span>
+                                </div>
+                                <div style={{ color: "var(--text-muted)", marginBottom: 2, fontSize: 10 }}>
+                                  d₂ = <span style={{ fontWeight: 500, color: "var(--text)" }}>{s.d2}</span>
+                                  <span style={{ marginLeft: 4 }}>({pt.name || ("#"+(userPoints.indexOf(pt)+1))} → locus)</span>
+                                </div>
+                                <div style={{ marginTop: 6, borderRadius: 5, overflow: "hidden", border: `0.5px solid var(--border)`, position: "relative" }}>
+                                  <button onClick={() => toggleSat(pt.id)}
+                                    style={{ position: "absolute", top: 3, right: 4, background: "rgba(0,0,0,0.55)", border: "none", borderRadius: "50%", cursor: "pointer", fontSize: 10, lineHeight: 1, color: "white", zIndex: 2, padding: "2px 3px", display: "flex", alignItems: "center", justifyContent: "center", width: 16, height: 16 }}>✕</button>
+                                  <div style={{ background: `linear-gradient(to right, ${domColor} 0%, ${domColor} ${satPct}%, rgba(128,128,128,0.2) ${satPct}%, rgba(128,128,128,0.2) 100%)`, padding: "5px 8px", textAlign: "center", position: "relative" }}>
+                                    <span style={{ fontSize: 10, color: "var(--text-muted)", position: "relative", zIndex: 1 }}>Saturation </span>
+                                    <span style={{ fontWeight: 700, fontSize: 14, position: "relative", zIndex: 1, color: "var(--text)" }}>{s.sat}%</span>
+                                  </div>
+                                </div>
+                                {s.domWl !== null && (
+                                  <div style={{ marginTop: 4, padding: "3px 6px", background: "var(--bg)", borderRadius: 4, textAlign: "center", borderTop: `0.5px solid var(--border)` }}>
+                                    <div style={{ color: "var(--text-muted)", fontSize: 10, marginBottom: 1 }}>
+                                      {s.complementary ? "λ complémentaire" : "λ dominante"}
+                                    </div>
+                                    <span style={{ fontWeight: 500, fontSize: 13, color: "var(--text)" }}>{s.domWl} nm</span>
+                                    {s.complementary && <span style={{ fontSize: 9, color: "var(--text-muted)", display: "block" }}>(pourpre — opposé)</span>}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()}
+                        </div>
                       );
                     })}
                   </>
@@ -1644,28 +1536,6 @@ export default function AppCouleur() {
           </div>
         </div>
       )}
-
-      {/* ── Popups flottants draggables — un par point ── */}
-      {pointPopups.map(popup => {
-        const pt = userPoints.find(p => p.id === popup.id);
-        if (!pt) return null;
-        const index = userPoints.indexOf(pt);
-        return (
-          <PointPopup
-            key={popup.id}
-            pt={pt}
-            screenX={popup.x}
-            screenY={popup.y}
-            index={index}
-            illuminant={illuminant}
-            onClose={() => closePopup(popup.id)}
-            onMove={(nx, ny) => movePopup(popup.id, nx, ny)}
-            onNameChange={(name) => setPointName(pt.id, name)}
-            onToggleSat={() => toggleSat(pt.id)}
-            onDelete={() => { setUserPoints(prev => prev.filter(p => p.id !== pt.id)); closePopup(popup.id); }}
-          />
-        );
-      })}
     </div>
   );
 }
