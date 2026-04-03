@@ -950,11 +950,7 @@ export default function RheogrammeSimulateur({ onBack }) {
     <div style={{ fontFamily: T.fontUi, background: T.bg, minHeight: "100vh" }}>
       {/* Header */}
       <div style={{ background: T.blue900, color: "#fff", padding: "14px 24px", display: "flex", alignItems: "center", gap: 12 }}>
-        {onBack && (
-          <button onClick={onBack} style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid rgba(255,255,255,0.3)", background: "transparent", color: "rgba(255,255,255,0.8)", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-            ← Menu
-          </button>
-        )}
+
         <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.22)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17 }}>⚗</div>
         <div>
           <div style={{ fontSize: 15, fontWeight: 700 }}>Simulateur de rhéogrammes</div>

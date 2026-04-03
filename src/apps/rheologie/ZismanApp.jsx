@@ -626,7 +626,7 @@ export default function ZismanApp({ onBack }) {
           {isEleve && nDone>0 && (
             <button onClick={handleFinish} style={{padding:"9px 20px",borderRadius:8,fontSize:14,fontWeight:900,fontFamily:F,border:`2px solid ${C.green}`,background:C.green,color:"#fff",cursor:"pointer"}}>J'ai fini →</button>
           )}
-          {onBack && <button onClick={onBack} style={{fontSize:12,fontWeight:800,fontFamily:F,padding:"5px 12px",borderRadius:6,border:`1.5px solid ${C.border}`,background:"transparent",color:C.muted,cursor:"pointer"}}>← Menu</button>}
+          
           <button onClick={()=>setRole(null)} style={{fontSize:12,fontWeight:800,fontFamily:F,padding:"5px 12px",borderRadius:6,border:`1.5px solid ${C.border}`,background:"transparent",color:C.muted,cursor:"pointer"}}>Changer de profil</button>
           {[["graph","Graphe"],["theory","Théorie"],["quiz","Quiz"]].map(([t,l])=>(
             <button key={t} onClick={()=>setTab(t)} style={{padding:"9px 20px",borderRadius:8,fontSize:14,fontWeight:800,fontFamily:F,border:`2px solid ${tab===t?C.accent:C.border}`,background:tab===t?C.accent:"transparent",color:tab===t?"#fff":C.muted,cursor:"pointer"}}>{l}</button>

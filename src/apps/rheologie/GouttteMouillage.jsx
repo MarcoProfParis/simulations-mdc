@@ -529,11 +529,7 @@ export default function GouttteMouillage({ onBack }) {
     <div style={{ minHeight: "100vh", background: "#f8fafc", fontFamily: "'Helvetica Neue',Arial,sans-serif", color: "#1e293b" }}>
 
       <div style={{ background: "white", borderBottom: "1px solid #e2e8f0", padding: "14px 24px", display: "flex", alignItems: "center", gap: 12 }}>
-        {onBack && (
-          <button onClick={onBack} style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid #e2e8f0", background: "transparent", color: "#64748b", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-            ← Menu
-          </button>
-        )}
+        
         <span style={{ fontFamily: "Georgia,serif", fontSize: 22, fontWeight: 700, letterSpacing: -.5 }}>Mouillage</span>
         <span style={{ fontSize: 13, color: "#94a3b8", fontStyle: "italic" }}>Simulation de l'angle de mouillage · BTS Métiers de la Chimie</span>
       </div>
