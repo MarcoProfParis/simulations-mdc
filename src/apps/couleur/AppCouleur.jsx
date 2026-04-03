@@ -1,43 +1,24 @@
 import { useState, useRef, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
 import { useTheme } from "../../ThemeContext";
+import { SPECTRUM_LOCUS } from "./spectrumLocus";
 
-const SPECTRUM_LOCUS = [
-  { nm: 380, x: 0.1741, y: 0.0050 },
-  { nm: 390, x: 0.1740, y: 0.0042 },
-  { nm: 400, x: 0.1733, y: 0.0048 },
-  { nm: 410, x: 0.1726, y: 0.0069 },
-  { nm: 420, x: 0.1714, y: 0.0119 },
-  { nm: 430, x: 0.1689, y: 0.0208 },
-  { nm: 440, x: 0.1641, y: 0.0180 },
-  { nm: 450, x: 0.1566, y: 0.0177 },
-  { nm: 460, x: 0.1440, y: 0.0297 },
-  { nm: 470, x: 0.1241, y: 0.0578 },
-  { nm: 475, x: 0.1096, y: 0.0868 },
-  { nm: 480, x: 0.0913, y: 0.1327 },
-  { nm: 485, x: 0.0687, y: 0.2007 },
-  { nm: 490, x: 0.0454, y: 0.2950 },
-  { nm: 495, x: 0.0235, y: 0.4127 },
-  { nm: 500, x: 0.0082, y: 0.5384 },
-  { nm: 505, x: 0.0039, y: 0.6548 },
-  { nm: 510, x: 0.0139, y: 0.7502 },
-  { nm: 515, x: 0.0362, y: 0.8024 },
-  { nm: 520, x: 0.0743, y: 0.8338 },
-  { nm: 530, x: 0.1547, y: 0.8059 },
-  { nm: 540, x: 0.2296, y: 0.7543 },
-  { nm: 550, x: 0.3016, y: 0.6923 },
-  { nm: 560, x: 0.3731, y: 0.6245 },
-  { nm: 570, x: 0.4441, y: 0.5547 },
-  { nm: 580, x: 0.5125, y: 0.4866 },
-  { nm: 590, x: 0.5752, y: 0.4242 },
-  { nm: 600, x: 0.6270, y: 0.3725 },
-  { nm: 610, x: 0.6658, y: 0.3340 },
-  { nm: 620, x: 0.6915, y: 0.3083 },
-  { nm: 630, x: 0.7006, y: 0.2993 },
-  { nm: 640, x: 0.7170, y: 0.2830 },
-  { nm: 650, x: 0.7260, y: 0.2740 },
-  { nm: 700, x: 0.7347, y: 0.2653 },
-  { nm: 780, x: 0.7347, y: 0.2653 },
-];
+// Point-in-polygon test for the gamut bounded by spectrum locus + purple line
+function isInsideGamut(px, py) {
+  // Build polygon: spectrum locus points (380→780) + purple line closing segment
+  const locus = SPECTRUM_LOCUS.filter(p => p.nm >= 380);
+  const poly = locus.map(p => [p.x, p.y]);
+  // poly[0] is 380nm, poly[last] is 780nm — connect with straight purple line
+  let inside = false;
+  const n = poly.length;
+  for (let i = 0, j = n - 1; i < n; j = i++) {
+    const [xi, yi] = poly[i];
+    const [xj, yj] = poly[j];
+    if (((yi > py) !== (yj > py)) && (px < (xj - xi) * (py - yi) / (yj - yi) + xi)) {
+      inside = !inside;
+    }
+  }
+  return inside;
+}
 
 const _planckXY = (T) => {
   let x;
@@ -669,7 +650,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
     }
     if (closest) {
       onDblClickPoint && onDblClickPoint(closest);
-    } else {
+    } else if (isInsideGamut(x, y)) {
       onAddPoint && onAddPoint({ x, y });
     }
   };
@@ -703,9 +684,12 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
       const scale2 = W / rect2.width;
       const cpx2 = (e.clientX - rect2.left) * scale2;
       const cpy2 = (e.clientY - rect2.top) * scale2;
-      setHint({ cpx: cpx2, cpy: cpy2 });
       if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
-      hintTimerRef.current = setTimeout(() => setHint(null), 2000);
+      // Delay hint so double-clicks don't flash it
+      hintTimerRef.current = setTimeout(() => {
+        setHint({ cpx: cpx2, cpy: cpy2, outside: !isInsideGamut(x, y) });
+        hintTimerRef.current = setTimeout(() => setHint(null), 2000);
+      }, 220);
     }
     if (near && modeRef.current === "point" && !dragPointRef.current) {
       let closest = null, bestD = Infinity;
@@ -818,7 +802,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
           });
         }
         if (closest) { onDblClickPoint && onDblClickPoint(closest); }
-        else { onAddPoint && onAddPoint({ x, y }); }
+        else if (isInsideGamut(x, y)) { onAddPoint && onAddPoint({ x, y }); }
       } else {
         lastTapRef.current = now;
         const [vx0,,vx1,] = viewRef.current;
@@ -836,9 +820,12 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
           const absY = rect4.top  + cpy / H * rect4.height;
           onClickPoint && onClickPoint(closestId, absX, absY);
         } else {
-          setHint({ cpx, cpy });
           if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
-          hintTimerRef.current = setTimeout(() => setHint(null), 2000);
+          // Delay so rapid second tap (double-tap) cancels the hint before it shows
+          hintTimerRef.current = setTimeout(() => {
+            setHint({ cpx, cpy, outside: !isInsideGamut(x, y) });
+            hintTimerRef.current = setTimeout(() => setHint(null), 2000);
+          }, 220);
         }
       }
     }
@@ -1071,13 +1058,13 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
               padding: "4px 10px",
               fontSize: 11,
               fontWeight: 500,
-              color: "var(--text-muted)",
+              color: hint.outside ? "rgba(200,60,60,0.85)" : "var(--text-muted)",
               boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
               whiteSpace: "nowrap",
               zIndex: 20,
               animation: "fadeInHint 0.15s ease",
             }}>
-              Double-cliquer pour ajouter un point
+              {hint.outside ? "Hors du gamut visible" : "Double-cliquer pour ajouter un point"}
             </div>
           )}
         </div>
