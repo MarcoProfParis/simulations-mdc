@@ -1,4 +1,13 @@
-import { useState, useRef, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, Fragment } from "react"
+import { Popover, PopoverButton, PopoverPanel, Transition, Disclosure, DisclosureButton, DisclosurePanel } from "@headlessui/react"
+import {
+  ChevronDownIcon,
+  Bars3Icon,
+  XMarkIcon,
+  SunIcon,
+  MoonIcon,
+  ChevronRightIcon,
+} from "@heroicons/react/24/outline"
 import { CATEGORIES } from "./config"
 import { useTheme } from "./ThemeContext"
 
@@ -17,56 +26,13 @@ function useIsMobile() {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Icône hamburger / croix animée
-───────────────────────────────────────────────────────────────────────────── */
-function HamburgerIcon({ open }) {
-  return (
-    <div className="flex flex-col justify-between w-[22px] h-[16px]">
-      <span
-        className="block h-[2px] rounded-sm transition-transform duration-250 origin-center"
-        style={{
-          background: "var(--text)",
-          transform: open ? "translateY(7px) rotate(45deg)" : "none",
-        }}
-      />
-      <span
-        className="block h-[2px] rounded-sm transition-opacity duration-200"
-        style={{ background: "var(--text)", opacity: open ? 0 : 1 }}
-      />
-      <span
-        className="block h-[2px] rounded-sm transition-transform duration-250 origin-center"
-        style={{
-          background: "var(--text)",
-          transform: open ? "translateY(-7px) rotate(-45deg)" : "none",
-        }}
-      />
-    </div>
-  )
-}
-
-/* ─────────────────────────────────────────────────────────────────────────────
    Barre de navigation
 ───────────────────────────────────────────────────────────────────────────── */
 function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
-  const [openMenu, setOpenMenu]             = useState(null)
-  const [mobileOpen, setMobileOpen]         = useState(false)
-  const [mobileExpanded, setMobileExpanded] = useState(null)
-  const navRef   = useRef(null)
+  const [mobileOpen, setMobileOpen] = useState(false)
   const isMobile = useIsMobile()
 
-  /* Fermer dropdown desktop au clic dehors */
-  useEffect(() => {
-    const h = e => {
-      if (navRef.current && !navRef.current.contains(e.target)) setOpenMenu(null)
-    }
-    document.addEventListener("mousedown", h)
-    return () => document.removeEventListener("mousedown", h)
-  }, [])
-
-  /* Fermer drawer au passage desktop */
   useEffect(() => { if (!isMobile) setMobileOpen(false) }, [isMobile])
-
-  /* Bloquer scroll body quand drawer ouvert */
   useEffect(() => {
     document.body.style.overflow = mobileOpen ? "hidden" : ""
     return () => { document.body.style.overflow = "" }
@@ -75,149 +41,184 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
   const goTo = useCallback((catId, appIdVal) => {
     setCategoryId(catId)
     setAppId(appIdVal)
-    setOpenMenu(null)
     setMobileOpen(false)
-    setMobileExpanded(null)
   }, [setCategoryId, setAppId])
 
   return (
     <>
       {/* ── Barre principale ── */}
       <nav
-        ref={navRef}
-        className="sticky top-0 z-50 flex items-center h-13 px-4"
+        className="sticky top-0 z-50 h-14 flex items-center px-4 md:px-6"
         style={{
           background: "var(--bg-card)",
           borderBottom: "1px solid var(--border)",
-          boxShadow: "0 1px 8px rgba(0,0,0,0.07)",
+          boxShadow: "0 1px 12px rgba(0,0,0,0.06)",
         }}
       >
         {/* Logo */}
         <button
           onClick={() => goTo(null, null)}
-          className="flex items-center gap-2 h-full pr-4 mr-2 shrink-0 font-extrabold tracking-tight cursor-pointer border-0 bg-transparent whitespace-nowrap"
-          style={{
-            fontSize: isMobile ? 13 : 15,
-            color: "var(--text)",
-            borderRight: "1px solid var(--border)",
-          }}
+          className="flex items-center gap-2.5 h-full pr-5 mr-4 shrink-0 border-0 bg-transparent cursor-pointer"
+          style={{ borderRight: "1px solid var(--border)" }}
         >
-          🧪 <span>Simulations MDC</span>
+          {/* Icône SVG minimaliste à la place de l'emoji */}
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="11" cy="11" r="9.5" stroke="currentColor" strokeWidth="1.5" style={{ color: "var(--text)" }}/>
+            <path d="M7 11 C7 8.5 9 7 11 7 C13 7 15 8.5 15 11 C15 13.5 13 15 11 15" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" style={{ color: "var(--text)" }}/>
+            <circle cx="11" cy="11" r="1.5" fill="currentColor" style={{ color: "var(--text)" }}/>
+          </svg>
+          <span
+            className="font-bold tracking-tight whitespace-nowrap text-sm"
+            style={{ color: "var(--text)", letterSpacing: "-0.02em" }}
+          >
+            Simulations MDC
+          </span>
         </button>
 
-        {/* ── DESKTOP : catégories ── */}
+        {/* ── DESKTOP : menus catégories ── */}
         {!isMobile && (
-          <div className="flex items-center flex-1 h-full">
-            {CATEGORIES.map(cat => {
-              const isOpen      = openMenu === cat.id
-              const isCatActive = categoryId === cat.id
-              return (
-                <div key={cat.id} className="relative h-full">
-                  <button
-                    onClick={() => setOpenMenu(isOpen ? null : cat.id)}
-                    onMouseEnter={e => { if (!isCatActive) e.currentTarget.style.color = cat.color }}
-                    onMouseLeave={e => { if (!isCatActive) e.currentTarget.style.color = "var(--text)" }}
-                    className="flex items-center gap-1.5 h-full px-4 text-[13px] whitespace-nowrap border-0 bg-transparent cursor-pointer transition-colors duration-150"
-                    style={{
-                      fontWeight: isCatActive ? 700 : 500,
-                      color: isCatActive ? cat.color : "var(--text)",
-                      borderBottom: isCatActive ? `2px solid ${cat.color}` : "2px solid transparent",
-                    }}
-                  >
-                    <span className="text-base">{cat.emoji}</span>
-                    {cat.label}
-                    <span
-                      className="text-[9px] ml-0.5 opacity-50 inline-block transition-transform duration-200"
-                      style={{ transform: isOpen ? "rotate(180deg)" : "none" }}
-                    >▾</span>
-                  </button>
-
-                  {/* Dropdown */}
-                  {isOpen && (
-                    <div
-                      className="absolute top-[calc(100%+1px)] left-0 min-w-[230px] z-[60] overflow-hidden"
+          <div className="flex items-center flex-1 h-full gap-1">
+            {CATEGORIES.map(cat => (
+              <Popover key={cat.id} className="relative h-full flex items-center">
+                {({ open, close }) => (
+                  <>
+                    <PopoverButton
+                      className="flex items-center gap-1.5 h-full px-3 text-[13px] font-medium border-0 bg-transparent cursor-pointer outline-none transition-colors duration-150 rounded-none"
                       style={{
-                        background: "var(--bg-card)",
-                        border: "1px solid var(--border)",
-                        borderRadius: "0 0 12px 12px",
-                        boxShadow: "0 8px 32px rgba(0,0,0,0.13)",
+                        color: categoryId === cat.id ? cat.color : "var(--text)",
+                        borderBottom: categoryId === cat.id
+                          ? `2px solid ${cat.color}`
+                          : "2px solid transparent",
+                        fontWeight: categoryId === cat.id ? 600 : 500,
                       }}
+                      onMouseEnter={e => { if (categoryId !== cat.id) e.currentTarget.style.color = cat.color }}
+                      onMouseLeave={e => { if (categoryId !== cat.id) e.currentTarget.style.color = "var(--text)" }}
                     >
-                      {/* En-tête catégorie */}
-                      <div
-                        className="flex items-center gap-2 px-3.5 pt-2.5 pb-2"
-                        style={{ borderBottom: "1px solid var(--border)" }}
-                      >
-                        <span className="text-xl">{cat.emoji}</span>
-                        <div>
-                          <p className="text-[12px] font-bold m-0" style={{ color: cat.color }}>{cat.label}</p>
-                          <p className="text-[10px] m-0" style={{ color: "var(--text-muted)" }}>{cat.description}</p>
-                        </div>
-                      </div>
+                      {cat.label}
+                      <ChevronDownIcon
+                        className="w-3.5 h-3.5 transition-transform duration-200"
+                        style={{
+                          transform: open ? "rotate(180deg)" : "rotate(0deg)",
+                          opacity: 0.5,
+                          color: "var(--text)",
+                        }}
+                      />
+                    </PopoverButton>
 
-                      {/* Apps */}
-                      {cat.apps.map(app => {
-                        const isActive = categoryId === cat.id && appId === app.id
-                        return (
-                          <button
-                            key={app.id}
-                            onClick={() => goTo(cat.id, app.id)}
-                            onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--bg)" }}
-                            onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "none" }}
-                            className="flex items-center gap-2.5 w-full px-3.5 py-2.5 text-left border-0 cursor-pointer transition-colors duration-150"
-                            style={{
-                              background: isActive ? `${cat.color}12` : "none",
-                              borderLeft: isActive ? `3px solid ${cat.color}` : "3px solid transparent",
-                            }}
-                          >
-                            <span className="text-lg shrink-0">{app.emoji}</span>
-                            <div>
-                              <p
-                                className="text-[13px] m-0"
-                                style={{ fontWeight: isActive ? 700 : 500, color: isActive ? cat.color : "var(--text)" }}
-                              >{app.label}</p>
-                              {app.description && (
-                                <p className="text-[10px] leading-snug mt-0.5 m-0" style={{ color: "var(--text-muted)" }}>
-                                  {app.description}
-                                </p>
-                              )}
-                            </div>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
+                    <Transition
+                      as={Fragment}
+                      enter="transition ease-out duration-150"
+                      enterFrom="opacity-0 translate-y-[-6px]"
+                      enterTo="opacity-100 translate-y-0"
+                      leave="transition ease-in duration-100"
+                      leaveFrom="opacity-100 translate-y-0"
+                      leaveTo="opacity-0 translate-y-[-4px]"
+                    >
+                      <PopoverPanel
+                        className="absolute top-[calc(100%+1px)] left-0 w-56 z-[60] overflow-hidden rounded-b-xl rounded-tr-xl"
+                        style={{
+                          background: "var(--bg-card)",
+                          border: "1px solid var(--border)",
+                          boxShadow: "0 12px 40px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.06)",
+                        }}
+                      >
+                        {/* Bande colorée en haut */}
+                        <div className="h-0.5 w-full" style={{ background: cat.color }} />
+
+                        <div className="py-1.5">
+                          {cat.apps.map(app => {
+                            const isActive = categoryId === cat.id && appId === app.id
+                            return (
+                              <button
+                                key={app.id}
+                                onClick={() => { goTo(cat.id, app.id); close() }}
+                                className="flex items-center justify-between w-full px-4 py-2.5 text-left group transition-colors duration-100"
+                                style={{
+                                  background: isActive ? `${cat.color}12` : "transparent",
+                                  borderLeft: isActive ? `3px solid ${cat.color}` : "3px solid transparent",
+                                  border: "none",
+                                  cursor: "pointer",
+                                }}
+                                onMouseEnter={e => { if (!isActive) e.currentTarget.style.background = "var(--bg)" }}
+                                onMouseLeave={e => { if (!isActive) e.currentTarget.style.background = "transparent" }}
+                              >
+                                <div>
+                                  <p
+                                    className="text-[13px] leading-snug m-0"
+                                    style={{
+                                      fontWeight: isActive ? 600 : 500,
+                                      color: isActive ? cat.color : "var(--text)",
+                                    }}
+                                  >
+                                    {app.label}
+                                  </p>
+                                  {app.description && (
+                                    <p className="text-[11px] mt-0.5 m-0 leading-snug" style={{ color: "var(--text-muted)" }}>
+                                      {app.description}
+                                    </p>
+                                  )}
+                                </div>
+                                <ChevronRightIcon
+                                  className="w-3.5 h-3.5 shrink-0 ml-2 opacity-0 group-hover:opacity-40 transition-opacity"
+                                  style={{ color: "var(--text)" }}
+                                />
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </PopoverPanel>
+                    </Transition>
+                  </>
+                )}
+              </Popover>
+            ))}
           </div>
         )}
 
         {/* Spacer mobile */}
         {isMobile && <div className="flex-1" />}
 
-        {/* Bouton thème */}
+        {/* ── Bouton dark mode — visible et stylé ── */}
         <button
           onClick={() => setDark(d => !d)}
-          className="shrink-0 px-3 py-1 rounded-full text-[12px] font-semibold cursor-pointer border transition-colors duration-150"
+          aria-label={dark ? "Passer en mode clair" : "Passer en mode sombre"}
+          className="relative flex items-center gap-2 px-3 py-1.5 rounded-lg cursor-pointer transition-all duration-200 shrink-0 text-[12px] font-semibold"
           style={{
-            background: "var(--bg)",
-            borderColor: "var(--border)",
-            color: "var(--text-muted)",
             marginLeft: isMobile ? 8 : 12,
+            background: dark
+              ? "rgba(251,191,36,0.15)"
+              : "rgba(99,102,241,0.10)",
+            border: dark
+              ? "1px solid rgba(251,191,36,0.35)"
+              : "1px solid rgba(99,102,241,0.25)",
+            color: dark ? "#fbbf24" : "#6366f1",
           }}
         >
-          {dark ? "☀️" : "🌙"}
+          {dark ? (
+            <>
+              <SunIcon className="w-4 h-4" />
+              {!isMobile && <span>Clair</span>}
+            </>
+          ) : (
+            <>
+              <MoonIcon className="w-4 h-4" />
+              {!isMobile && <span>Sombre</span>}
+            </>
+          )}
         </button>
 
-        {/* Hamburger — mobile seulement */}
+        {/* ── Hamburger mobile ── */}
         {isMobile && (
           <button
             onClick={() => setMobileOpen(o => !o)}
             aria-label={mobileOpen ? "Fermer le menu" : "Ouvrir le menu"}
             className="flex items-center justify-center ml-2 p-1.5 rounded-lg border-0 bg-transparent cursor-pointer"
+            style={{ color: "var(--text)" }}
           >
-            <HamburgerIcon open={mobileOpen} />
+            {mobileOpen
+              ? <XMarkIcon className="w-5 h-5" />
+              : <Bars3Icon className="w-5 h-5" />
+            }
           </button>
         )}
       </nav>
@@ -228,8 +229,8 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
           onClick={() => setMobileOpen(false)}
           className="fixed inset-0 z-[49] transition-opacity duration-250"
           style={{
-            top: 52,
-            background: "rgba(0,0,0,0.35)",
+            top: 56,
+            background: "rgba(0,0,0,0.4)",
             opacity: mobileOpen ? 1 : 0,
             pointerEvents: mobileOpen ? "auto" : "none",
           }}
@@ -239,12 +240,12 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
       {/* ── MOBILE : Drawer ── */}
       {isMobile && (
         <div
-          className="fixed top-[52px] right-0 bottom-0 z-50 flex flex-col overflow-y-auto"
+          className="fixed top-[56px] right-0 bottom-0 z-50 flex flex-col overflow-y-auto"
           style={{
             width: "min(300px, 85vw)",
             background: "var(--bg-card)",
             borderLeft: "1px solid var(--border)",
-            boxShadow: "-4px 0 24px rgba(0,0,0,0.12)",
+            boxShadow: "-8px 0 32px rgba(0,0,0,0.12)",
             transform: mobileOpen ? "translateX(0)" : "translateX(100%)",
             transition: "transform 0.28s cubic-bezier(0.4,0,0.2,1)",
           }}
@@ -252,78 +253,89 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
           {/* Accueil */}
           <button
             onClick={() => goTo(null, null)}
-            className="flex items-center gap-2.5 px-4 py-3.5 text-[14px] border-0 cursor-pointer text-left"
+            className="flex items-center gap-3 px-5 py-4 text-[14px] border-0 cursor-pointer text-left transition-colors"
             style={{
-              background: !categoryId ? "var(--bg)" : "none",
+              background: !categoryId ? "var(--bg)" : "transparent",
               borderBottom: "1px solid var(--border)",
-              borderLeft: !categoryId ? "3px solid var(--text)" : "3px solid transparent",
-              fontWeight: !categoryId ? 700 : 500,
+              fontWeight: !categoryId ? 600 : 400,
               color: "var(--text)",
             }}
           >
-            🏠 <span>Accueil</span>
+            Accueil
           </button>
 
-          {/* Catégories accordéon */}
-          {CATEGORIES.map(cat => {
-            const isExpanded  = mobileExpanded === cat.id
-            const isCatActive = categoryId === cat.id
-            return (
-              <div key={cat.id} style={{ borderBottom: "1px solid var(--border)" }}>
-                <button
-                  onClick={() => setMobileExpanded(isExpanded ? null : cat.id)}
-                  className="flex items-center gap-2.5 w-full px-4 py-3 text-left border-0 cursor-pointer"
-                  style={{
-                    background: isCatActive && !isExpanded ? `${cat.color}10` : "none",
-                    borderLeft: isCatActive ? `3px solid ${cat.color}` : "3px solid transparent",
-                  }}
-                >
-                  <span className="text-xl">{cat.emoji}</span>
-                  <span
-                    className="flex-1 text-[14px]"
-                    style={{ fontWeight: isCatActive ? 700 : 500, color: isCatActive ? cat.color : "var(--text)" }}
-                  >{cat.label}</span>
-                  <span
-                    className="text-[10px] inline-block transition-transform duration-200"
-                    style={{ color: "var(--text-muted)", transform: isExpanded ? "rotate(180deg)" : "none" }}
-                  >▾</span>
-                </button>
+          {/* Catégories en accordéon — via Disclosure de HeadlessUI */}
+          {CATEGORIES.map(cat => (
+            <Disclosure key={cat.id} defaultOpen={categoryId === cat.id}>
+              {({ open }) => (
+                <div style={{ borderBottom: "1px solid var(--border)" }}>
+                  <DisclosureButton
+                    className="flex items-center gap-3 w-full px-5 py-3.5 text-left cursor-pointer"
+                    style={{
+                      background: categoryId === cat.id && !open ? `${cat.color}10` : "transparent",
+                      borderLeft: categoryId === cat.id ? `3px solid ${cat.color}` : "3px solid transparent",
+                      border: "none",
+                      borderLeft: categoryId === cat.id ? `3px solid ${cat.color}` : "3px solid transparent",
+                    }}
+                  >
+                    <span
+                      className="flex-1 text-[14px]"
+                      style={{ fontWeight: categoryId === cat.id ? 600 : 500, color: categoryId === cat.id ? cat.color : "var(--text)" }}
+                    >
+                      {cat.label}
+                    </span>
+                    <ChevronDownIcon
+                      className="w-4 h-4 transition-transform duration-200"
+                      style={{
+                        transform: open ? "rotate(180deg)" : "none",
+                        color: "var(--text-muted)",
+                      }}
+                    />
+                  </DisclosureButton>
 
-                {/* Apps */}
-                {isExpanded && (
-                  <div style={{ background: "var(--bg)" }}>
-                    {cat.apps.map(app => {
-                      const isActive = categoryId === cat.id && appId === app.id
-                      return (
-                        <button
-                          key={app.id}
-                          onClick={() => goTo(cat.id, app.id)}
-                          className="flex items-center gap-2.5 w-full pl-8 pr-4 py-2.5 text-left border-0 cursor-pointer"
-                          style={{
-                            background: isActive ? `${cat.color}12` : "none",
-                            borderLeft: isActive ? `3px solid ${cat.color}` : "3px solid transparent",
-                          }}
-                        >
-                          <span className="text-base shrink-0">{app.emoji}</span>
-                          <div>
-                            <p
-                              className="text-[13px] m-0"
-                              style={{ fontWeight: isActive ? 700 : 400, color: isActive ? cat.color : "var(--text)" }}
-                            >{app.label}</p>
-                            {app.description && (
-                              <p className="text-[10px] mt-0.5 m-0" style={{ color: "var(--text-muted)" }}>
-                                {app.description}
+                  <Transition
+                    enter="transition duration-150 ease-out"
+                    enterFrom="opacity-0 -translate-y-1"
+                    enterTo="opacity-100 translate-y-0"
+                    leave="transition duration-100 ease-in"
+                    leaveFrom="opacity-100 translate-y-0"
+                    leaveTo="opacity-0 -translate-y-1"
+                  >
+                    <DisclosurePanel style={{ background: "var(--bg)" }}>
+                      {cat.apps.map(app => {
+                        const isActive = categoryId === cat.id && appId === app.id
+                        return (
+                          <button
+                            key={app.id}
+                            onClick={() => goTo(cat.id, app.id)}
+                            className="flex items-start gap-3 w-full pl-8 pr-5 py-3 text-left border-0 cursor-pointer transition-colors"
+                            style={{
+                              background: isActive ? `${cat.color}12` : "transparent",
+                              borderLeft: isActive ? `3px solid ${cat.color}` : "3px solid transparent",
+                            }}
+                          >
+                            <div>
+                              <p
+                                className="text-[13px] m-0"
+                                style={{ fontWeight: isActive ? 600 : 400, color: isActive ? cat.color : "var(--text)" }}
+                              >
+                                {app.label}
                               </p>
-                            )}
-                          </div>
-                        </button>
-                      )
-                    })}
-                  </div>
-                )}
-              </div>
-            )
-          })}
+                              {app.description && (
+                                <p className="text-[11px] mt-0.5 m-0" style={{ color: "var(--text-muted)" }}>
+                                  {app.description}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </DisclosurePanel>
+                  </Transition>
+                </div>
+              )}
+            </Disclosure>
+          ))}
         </div>
       )}
     </>
@@ -331,7 +343,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark }) {
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
-   Carte réutilisable
+   Carte réutilisable — sans emoji
 ───────────────────────────────────────────────────────────────────────────── */
 function AppCard({ item, accent, onClick }) {
   const [hovered, setHovered] = useState(false)
@@ -345,19 +357,27 @@ function AppCard({ item, accent, onClick }) {
         width: "clamp(150px, 42vw, 240px)",
         padding: "clamp(16px, 4vw, 28px) clamp(12px, 3vw, 24px)",
         borderColor: hovered ? accent : "var(--border)",
-        background: hovered ? `${accent}18` : "var(--bg-card)",
-        boxShadow: hovered ? `0 8px 24px ${accent}22` : "var(--shadow)",
+        background: hovered ? `${accent}12` : "var(--bg-card)",
+        boxShadow: hovered ? `0 8px 32px ${accent}22` : "var(--shadow)",
       }}
     >
-      <div className="mb-3" style={{ fontSize: "clamp(26px, 5vw, 36px)" }}>{item.emoji}</div>
+      {/* Barre colorée en haut */}
+      <div
+        className="w-8 h-1 rounded-full mb-4 transition-all duration-200"
+        style={{ background: hovered ? accent : "var(--border)" }}
+      />
       <p
         className="font-bold mb-1.5 m-0"
         style={{ fontSize: "clamp(13px, 3vw, 15px)", color: "var(--text)" }}
-      >{item.label}</p>
+      >
+        {item.label}
+      </p>
       <p
         className="m-0 leading-relaxed"
         style={{ fontSize: "clamp(11px, 2.5vw, 12px)", color: "var(--text-muted)" }}
-      >{item.description}</p>
+      >
+        {item.description}
+      </p>
     </button>
   )
 }
@@ -401,19 +421,22 @@ export default function App() {
       <div>
         {nav}
         <div
-          className="min-h-[calc(100vh-52px)] flex flex-col items-center"
+          className="min-h-[calc(100vh-56px)] flex flex-col items-center"
           style={{
             background: "var(--bg)",
             padding: "clamp(1rem,4vw,2rem)",
             paddingTop: "clamp(1.5rem,5vw,3rem)",
           }}
         >
-          <div className="text-center mb-10 w-full">
-            <span style={{ fontSize: "clamp(32px,7vw,40px)" }}>{cat.emoji}</span>
+          <div className="text-center mb-10 w-full max-w-3xl">
+            {/* Trait coloré */}
+            <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background: cat.color }} />
             <h1
-              className="font-extrabold tracking-tight mt-2 mb-1"
+              className="font-extrabold tracking-tight mt-0 mb-1"
               style={{ fontSize: "clamp(20px,4vw,26px)", color: "var(--text)" }}
-            >{cat.label}</h1>
+            >
+              {cat.label}
+            </h1>
             <p className="m-0" style={{ fontSize: "clamp(12px,3vw,14px)", color: "var(--text-muted)" }}>
               {cat.description}
             </p>
@@ -433,18 +456,20 @@ export default function App() {
     <div>
       {nav}
       <div
-        className="min-h-[calc(100vh-52px)] flex flex-col items-center"
+        className="min-h-[calc(100vh-56px)] flex flex-col items-center"
         style={{
           background: "var(--bg)",
           padding: "clamp(1rem,4vw,2rem)",
           paddingTop: "clamp(1.5rem,5vw,3rem)",
         }}
       >
-        <div className="text-center mb-10 w-full">
+        <div className="text-center mb-10 w-full max-w-3xl">
           <h1
-            className="font-extrabold tracking-tight mt-2 mb-1"
+            className="font-extrabold tracking-tight mt-0 mb-1"
             style={{ fontSize: "clamp(20px,4vw,26px)", color: "var(--text)" }}
-          >Simulations MDC</h1>
+          >
+            Simulations MDC
+          </h1>
           <p className="m-0" style={{ fontSize: "clamp(12px,3vw,14px)", color: "var(--text-muted)" }}>
             BTS Métiers de la Chimie
           </p>
