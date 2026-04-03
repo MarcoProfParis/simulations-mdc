@@ -20,7 +20,7 @@ const SPECTRUM_LOCUS = [
   { nm: 500, x: 0.0082, y: 0.5384 },
   { nm: 505, x: 0.0039, y: 0.6548 },
   { nm: 510, x: 0.0139, y: 0.7502 },
-  { nm: 515, x: 0.032, y: 0.8154 },
+  { nm: 515, x: 0.0362, y: 0.8024 },
   { nm: 520, x: 0.0743, y: 0.8338 },
   { nm: 530, x: 0.1547, y: 0.8059 },
   { nm: 540, x: 0.2296, y: 0.7543 },
@@ -59,18 +59,9 @@ const ILLUMINANTS = {
 };
 
 const PRIMARY_SETS = {
-  sRGB: {
-    r: { x: 0.6400, y: 0.3300 }, g: { x: 0.3000, y: 0.6000 }, b: { x: 0.1500, y: 0.0600 },
-    label: "sRGB / HDTV"
-  },
-  AdobeRGB: {
-    r: { x: 0.6400, y: 0.3300 }, g: { x: 0.2100, y: 0.7100 }, b: { x: 0.1500, y: 0.0600 },
-    label: "Adobe RGB"
-  },
-  DCI_P3: {
-    r: { x: 0.6800, y: 0.3200 }, g: { x: 0.2650, y: 0.6900 }, b: { x: 0.1500, y: 0.0600 },
-    label: "DCI-P3 (Cinéma)"
-  },
+  sRGB:     { r: { x: 0.6400, y: 0.3300 }, g: { x: 0.3000, y: 0.6000 }, b: { x: 0.1500, y: 0.0600 }, label: "sRGB / HDTV" },
+  AdobeRGB: { r: { x: 0.6400, y: 0.3300 }, g: { x: 0.2100, y: 0.7100 }, b: { x: 0.1500, y: 0.0600 }, label: "Adobe RGB" },
+  DCI_P3:   { r: { x: 0.6800, y: 0.3200 }, g: { x: 0.2650, y: 0.6900 }, b: { x: 0.1500, y: 0.0600 }, label: "DCI-P3 (Cinéma)" },
 };
 
 function nmToRGB(nm) {
@@ -95,13 +86,6 @@ const PAD = { l: 48, r: 28, t: 28, b: 48 };
 const PW = W - PAD.l - PAD.r;
 const PH = H - PAD.t - PAD.b;
 
-function toC(x, y) {
-  const cx = PAD.l + x * PW / 0.85;
-  const cy = PAD.t + (1 - y / 0.85) * PH;
-  return [cx, cy];
-}
-
-// ── Palette de couleurs adaptée au thème (utilisée dans le canvas) ────────────
 function useCanvasColors(dark) {
   return {
     ink:        dark ? "rgba(240,240,240,0.90)" : "rgba(20,20,20,0.85)",
@@ -146,8 +130,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
   const mouseDownPosRef = useRef(null);
   const [nearPoint, setNearPoint] = useState(false);
   const drawingRef = useRef(null);
-  // Hint "double-cliquer pour ajouter"
-  const [hint, setHint] = useState(null); // { x, y } canvas coords ou null
+  const [hint, setHint] = useState(null);
   const hintTimerRef = useRef(null);
 
   const toCv = useCallback((x, y, v) => {
@@ -483,7 +466,6 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
           }
         }
       }
-      // Point circle
       ctx.beginPath(); ctx.arc(cx, cy, 6, 0, Math.PI * 2);
       ctx.fillStyle = C.dotFill; ctx.fill();
       ctx.strokeStyle = C.dotStroke; ctx.lineWidth = 1.5; ctx.stroke();
@@ -674,12 +656,10 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
   const handleDblClick = (e) => {
     const { x, y, valid } = getXY(e);
     if (!valid) return;
-    // Annuler le hint s'il était affiché
     if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
     setHint(null);
     const [vx0,,vx1,] = viewRef.current;
     const threshold = (vx1 - vx0) * 0.04;
-    // Chercher un point existant proche
     let closest = null, bestD = Infinity;
     if (userPoints && userPoints.length) {
       userPoints.forEach(pt => {
@@ -688,10 +668,8 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
       });
     }
     if (closest) {
-      // Double-clic sur un point existant → ouvrir popup
       onDblClickPoint && onDblClickPoint(closest);
     } else {
-      // Double-clic sur zone vide → ajouter un point
       onAddPoint && onAddPoint({ x, y });
     }
   };
@@ -720,7 +698,6 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
       }
       return;
     }
-    // Simple clic sur zone vide en mode point → afficher le hint
     if (!near && modeRef.current === "point") {
       const rect2 = canvasRef.current.getBoundingClientRect();
       const scale2 = W / rect2.width;
@@ -730,30 +707,26 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
       if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
       hintTimerRef.current = setTimeout(() => setHint(null), 2000);
     }
-    // Clic sur un point existant → ouvrir son popup
     if (near && modeRef.current === "point" && !dragPointRef.current) {
-      const [vx0,,vx1,] = viewRef.current;
-      const threshold = (vx1 - vx0) * 0.025;
       let closest = null, bestD = Infinity;
       userPoints.forEach(pt => {
         const d = Math.sqrt((pt.x-x)**2+(pt.y-y)**2);
         if (d < threshold && d < bestD) { bestD = d; closest = pt.id; }
       });
       if (closest) {
-        // Coordonnées fenêtre absolues pour positionner le popup en fixed
         onClickPoint && onClickPoint(closest, e.clientX, e.clientY);
       }
     }
   };
 
-  // ── Zoom centré sur le milieu de la vue courante ─────────────────────────────
-  const ZOOM_FACTOR = 1.35; // facteur par clic
-  const MIN_SPAN = 0.05;    // zoom max (très zoomé)
-  const MAX_SPAN = 1.6;     // zoom min (dézoomé, peut être < vue initiale 0.85)
+  // ── Zoom ────────────────────────────────────────────────────────────────────
+  const ZOOM_FACTOR = 1.35;
+  const MIN_SPAN = 0.05;
+  const MAX_SPAN = 1.6;
 
   const applyZoom = useCallback((factor) => {
     const [vx0, vy0, vx1, vy1] = viewRef.current;
-    const mx = (vx0 + vx1) / 2; // centre de la vue
+    const mx = (vx0 + vx1) / 2;
     const my = (vy0 + vy1) / 2;
     const nx0 = mx + (vx0 - mx) * factor;
     const ny0 = my + (vy0 - my) * factor;
@@ -772,14 +745,13 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
     const nv = [0, 0, 0.85, 0.85];
     viewRef.current = nv; setView(nv); draw(nv);
   };
-  // Zoom niveau courant : 0.85 / span courante (1 = vue initiale, >1 = zoomé, <1 = dézoomé)
   const currentSpan = view[2] - view[0];
-  const zoomLevel = 0.85 / currentSpan; // 1 par défaut
+  const zoomLevel = 0.85 / currentSpan;
   const isZoomed = Math.abs(zoomLevel - 1) > 0.02;
 
-  // ── Touch handlers (pan + double-tap) ────────────────────────────────────────
-  const touchStartRef = useRef(null); // { x, y, t } dernier touchstart
-  const lastTapRef    = useRef(0);    // timestamp du tap précédent
+  // ── Touch handlers ──────────────────────────────────────────────────────────
+  const touchStartRef = useRef(null);
+  const lastTapRef    = useRef(0);
 
   const getTouchXY = (touch) => {
     const rect = canvasRef.current.getBoundingClientRect();
@@ -798,7 +770,6 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
     const t = e.touches[0];
     const pos = getTouchXY(t);
     touchStartRef.current = { ...pos, ts: Date.now() };
-    // Démarrer le pan tactile
     const [vx0, vy0, vx1, vy1] = viewRef.current;
     const rect = canvasRef.current.getBoundingClientRect();
     const scale = W / rect.width;
@@ -829,13 +800,11 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
     if (!touchStartRef.current) return;
     const now = Date.now();
     const dt = now - touchStartRef.current.ts;
-    // Tap court (< 300ms sans mouvement)
     if (dt < 300) {
       const { x, y, cpx, cpy, valid } = touchStartRef.current;
       if (!valid) return;
       const dtap = now - lastTapRef.current;
       if (dtap < 400) {
-        // Double-tap → ajouter point ou ouvrir popup
         lastTapRef.current = 0;
         if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
         setHint(null);
@@ -851,7 +820,6 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
         if (closest) { onDblClickPoint && onDblClickPoint(closest); }
         else { onAddPoint && onAddPoint({ x, y }); }
       } else {
-        // Premier tap → hint si zone vide, popup si point existant
         lastTapRef.current = now;
         const [vx0,,vx1,] = viewRef.current;
         const threshold = (vx1 - vx0) * 0.025;
@@ -863,13 +831,11 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
           });
         }
         if (closestId) {
-          // Tap sur un point → ouvrir popup (coordonnées fenêtre absolues)
           const rect4 = canvasRef.current.getBoundingClientRect();
           const absX = rect4.left + cpx / W * rect4.width;
           const absY = rect4.top  + cpy / H * rect4.height;
           onClickPoint && onClickPoint(closestId, absX, absY);
         } else {
-          // Tap zone vide → hint
           setHint({ cpx, cpy });
           if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
           hintTimerRef.current = setTimeout(() => setHint(null), 2000);
@@ -879,7 +845,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
     touchStartRef.current = null;
   };
 
-  // ── Styles des boutons latéraux — adaptés au thème ──────────────────────────
+  // ── Styles boutons latéraux ─────────────────────────────────────────────────
   const btnBase = {
     background: "var(--bg-card)",
     border: `0.5px solid var(--border)`,
@@ -910,7 +876,6 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
     return () => document.removeEventListener("mousedown", handler);
   }, [showInfo]);
 
-  // Style commun pour les popups flottants (tooltips, macadam)
   const popupStyle = {
     background: "var(--bg-card)",
     border: `1px solid var(--border)`,
@@ -920,7 +885,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
 
   return (
     <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
-      {/* Tool buttons — LEFT of canvas — sticky */}
+      {/* Boutons latéraux gauche — sticky */}
       <div style={{
         display: "flex", flexDirection: "column", gap: 4, paddingTop: 4,
         position: "sticky", top: 56, alignSelf: "flex-start", zIndex: 5,
@@ -981,11 +946,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
 
         <div style={{ position: "relative" }}>
           <div ref={macadamRef}>
-            <button
-              title="Tolérance colorimétrique (ellipses MacAdam)"
-              onClick={() => setMacadamOpen(v => !v)}
-              style={macadamFactor > 0 ? btnActive : btnBase}
-            >
+            <button title="Tolérance colorimétrique (ellipses MacAdam)" onClick={() => setMacadamOpen(v => !v)} style={macadamFactor > 0 ? btnActive : btnBase}>
               <svg width="26" height="26" viewBox="0 0 16 16" fill="none">
                 <ellipse cx="8" cy="8" rx="6" ry="3.5" stroke="currentColor" strokeWidth="1.3" transform="rotate(-30 8 8)"/>
                 <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
@@ -1040,23 +1001,16 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
         <div style={{ borderTop: `0.5px solid var(--border)`, margin: "4px 0" }} />
 
         <div style={{ position: "relative" }} ref={infoRef}>
-          <button title="Aide" onClick={() => setShowInfo(v => !v)} style={{ ...( showInfo ? btnActive : btnBase ), fontSize: 18, fontWeight: 600 }}>?</button>
+          <button title="Aide" onClick={() => setShowInfo(v => !v)} style={{ ...(showInfo ? btnActive : btnBase), fontSize: 18, fontWeight: 600 }}>?</button>
           {showInfo && (
-            <div style={{
-              position: "absolute", left: 58, top: 0, zIndex: 10,
-              borderRadius: 8, padding: "12px 14px", width: 240, fontSize: 12, lineHeight: 1.6,
-              ...popupStyle,
-            }}>
+            <div style={{ position: "absolute", left: 58, top: 0, zIndex: 10, borderRadius: 8, padding: "12px 14px", width: 240, fontSize: 12, lineHeight: 1.6, ...popupStyle }}>
               <p style={{ margin: "0 0 10px", fontWeight: 600, fontSize: 13, color: "var(--text)" }}>Comment utiliser l'espace Colorimétrique</p>
-              <p style={{ margin: "0 0 8px", color: "var(--text-muted)" }}>🖱️ <strong style={{ color: "var(--text)" }}>Double-cliquer</strong> sur le graphique pour ajouter un point. Un simple clic sur un point permet de le déplacer. Utiliser la fonction réticule si nécessaire <strong style={{ color: "var(--text)" }}>⊕</strong>.</p>
-              <p style={{ margin: "0 0 6px", color: "var(--text-muted)" }}><strong style={{ color: "var(--text)" }}>+ / −</strong> — boutons en haut du graphe pour zoomer ou dézoomer (départ ×1, sans limite de dézoom).</p>
-              <p style={{ margin: "0 0 6px", color: "var(--text-muted)" }}><strong style={{ color: "var(--text)" }}>Courbe K</strong> — affiche le locus de Planck (corps noir) de 1667 K à 20 000 K.</p>
-              <p style={{ margin: "0 0 6px", color: "var(--text-muted)" }}>Ajouter ou supprimer le remplissage chromatique du diagramme.</p>
-              <p style={{ margin: "0 0 12px", color: "var(--text-muted)" }}><strong style={{ color: "var(--text)" }}>Ellipses</strong> — tolérance colorimétrique MacAdam (facteurs ×1, ×2, ×5, ×10).</p>
+              <p style={{ margin: "0 0 8px", color: "var(--text-muted)" }}>🖱️ <strong style={{ color: "var(--text)" }}>Double-cliquer</strong> sur le graphique pour ajouter un point. Un simple clic sur un point permet de le déplacer.</p>
+              <p style={{ margin: "0 0 6px", color: "var(--text-muted)" }}><strong style={{ color: "var(--text)" }}>+ / −</strong> — boutons en haut du graphe pour zoomer ou dézoomer.</p>
+              <p style={{ margin: "0 0 6px", color: "var(--text-muted)" }}><strong style={{ color: "var(--text)" }}>Courbe K</strong> — locus de Planck (corps noir) de 1667 K à 20 000 K.</p>
+              <p style={{ margin: "0 0 12px", color: "var(--text-muted)" }}><strong style={{ color: "var(--text)" }}>Ellipses</strong> — tolérance MacAdam (×1, ×2, ×5, ×10).</p>
               <hr style={{ border: "none", borderTop: `0.5px solid var(--border)`, margin: "0 0 10px" }}/>
-              <p style={{ margin: "0 0 6px", fontWeight: 600, color: "var(--text)" }}>Panneau de droite (par point) :</p>
-              <p style={{ margin: "0 0 6px", color: "var(--text-muted)" }}><strong style={{ color: "var(--text)" }}>◎ Saturation</strong> — trace la droite illuminant→point→locus et calcule d₁, d₂, le % de saturation, la longueur d'onde dominante (ou complémentaire).</p>
-              <p style={{ margin: 0, color: "var(--text-muted)" }}>⬇ En haut à droite, <strong style={{ color: "var(--text)" }}>Exporter</strong> — télécharge le diagramme et les données en PNG haute résolution.</p>
+              <p style={{ margin: 0, color: "var(--text-muted)" }}>⬇ <strong style={{ color: "var(--text)" }}>Exporter</strong> — PNG haute résolution.</p>
             </div>
           )}
         </div>
@@ -1064,7 +1018,7 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
 
       {/* Canvas */}
       <div style={{ position: "relative", flex: 1 }}>
-        {/* ── Barre zoom + reset sticky au-dessus du canvas ── */}
+        {/* Barre zoom sticky */}
         <div style={{
           position: "sticky", top: 56, zIndex: 10,
           display: "flex", alignItems: "center", gap: 6,
@@ -1073,26 +1027,13 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
           borderBottom: `1px solid var(--border)`,
           borderRadius: "8px 8px 0 0",
         }}>
-          <button
-            onClick={zoomOut}
-            title="Dézoomer"
-            style={{ ...btnBase, fontSize: 26, fontWeight: 300, lineHeight: 1 }}
-          >−</button>
-          <button
-            onClick={zoomIn}
-            title="Zoomer"
-            style={{ ...btnBase, fontSize: 26, fontWeight: 300, lineHeight: 1 }}
-          >+</button>
-          <span style={{
-            fontSize: 12, fontWeight: 600, minWidth: 40, textAlign: "center",
-            color: "var(--text-muted)", fontVariantNumeric: "tabular-nums",
-          }}>
+          <button onClick={zoomOut} title="Dézoomer" style={{ ...btnBase, fontSize: 26, fontWeight: 300, lineHeight: 1 }}>−</button>
+          <button onClick={zoomIn}  title="Zoomer"   style={{ ...btnBase, fontSize: 26, fontWeight: 300, lineHeight: 1 }}>+</button>
+          <span style={{ fontSize: 12, fontWeight: 600, minWidth: 40, textAlign: "center", color: "var(--text-muted)", fontVariantNumeric: "tabular-nums" }}>
             ×{zoomLevel.toFixed(zoomLevel < 10 ? 1 : 0)}
           </span>
           {isZoomed && (
-            <button
-              onClick={resetZoom}
-              title="Réinitialiser le zoom"
+            <button onClick={resetZoom} title="Réinitialiser le zoom"
               style={{ ...btnBase, fontSize: 12, fontWeight: 600, width: "auto", padding: "0 10px", color: "var(--text-muted)" }}
             >↺ ×1</button>
           )}
@@ -1117,28 +1058,25 @@ const ChromaticityDiagram = forwardRef(function ChromaticityDiagram({ illuminant
             onTouchMove={handleTouchMove}
             onTouchEnd={handleTouchEnd}
           />
-          {/* Hint "double-cliquer pour ajouter" */}
           {hint && (
-            <div
-              style={{
-                position: "absolute",
-                left: `${hint.cpx / W * 100}%`,
-                top: `${hint.cpy / H * 100}%`,
-                transform: "translate(-50%, -120%)",
-                pointerEvents: "none",
-                background: "var(--bg-card)",
-                border: `1px solid var(--border)`,
-                borderRadius: 6,
-                padding: "4px 10px",
-                fontSize: 11,
-                fontWeight: 500,
-                color: "var(--text-muted)",
-                boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
-                whiteSpace: "nowrap",
-                zIndex: 20,
-                animation: "fadeInHint 0.15s ease",
-              }}
-            >
+            <div style={{
+              position: "absolute",
+              left: `${hint.cpx / W * 100}%`,
+              top: `${hint.cpy / H * 100}%`,
+              transform: "translate(-50%, -120%)",
+              pointerEvents: "none",
+              background: "var(--bg-card)",
+              border: `1px solid var(--border)`,
+              borderRadius: 6,
+              padding: "4px 10px",
+              fontSize: 11,
+              fontWeight: 500,
+              color: "var(--text-muted)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+              whiteSpace: "nowrap",
+              zIndex: 20,
+              animation: "fadeInHint 0.15s ease",
+            }}>
               Double-cliquer pour ajouter un point
             </div>
           )}
@@ -1210,25 +1148,24 @@ function computeSaturation(pt, illuminantKey) {
   return { d1: d1.toFixed(5), d2: d2.toFixed(5), sat: sat.toFixed(1), domWl: domWl !== null ? Math.round(domWl) : null, complementary };
 }
 
-// ── Popup flottant draggable par point ───────────────────────────────────────
+// ── Popup flottant compact et draggable ──────────────────────────────────────
 function PointPopup({ pt, screenX, screenY, index, illuminant, onClose, onMove, onNameChange, onToggleSat, onDelete }) {
-  const popupRef  = useRef(null);               // ← bug corrigé : ref déclarée ici
+  const popupRef  = useRef(null);
   const offsetRef = useRef({ x: 0, y: 0 });
-  const posRef    = useRef({ x: screenX, y: screenY }); // ref pour éviter les stales dans les listeners
-  const [pos, setPos]         = useState({ x: screenX, y: screenY });
+  const posRef    = useRef({ x: screenX, y: screenY });
+  const [pos, setPos]           = useState({ x: screenX, y: screenY });
   const [dragging, setDragging] = useState(false);
 
-  // ── Clamp position dans la fenêtre ──────────────────────────────────────────
   const clampPos = (x, y) => {
     const el = popupRef.current;
-    const w = el ? el.offsetWidth  : 260;
-    const h = el ? el.offsetHeight : 300;
-    const nx = Math.max(8, Math.min(window.innerWidth  - w - 8, x));
-    const ny = Math.max(8, Math.min(window.innerHeight - h - 8, y));
-    return { x: nx, y: ny };
+    const w = el ? el.offsetWidth  : 200;
+    const h = el ? el.offsetHeight : 260;
+    return {
+      x: Math.max(8, Math.min(window.innerWidth  - w - 8, x)),
+      y: Math.max(8, Math.min(window.innerHeight - h - 8, y)),
+    };
   };
 
-  // ── Démarrer le drag ─────────────────────────────────────────────────────────
   const startDrag = (clientX, clientY) => {
     offsetRef.current = { x: clientX - posRef.current.x, y: clientY - posRef.current.y };
     setDragging(true);
@@ -1245,15 +1182,13 @@ function PointPopup({ pt, screenX, screenY, index, illuminant, onClose, onMove, 
     startDrag(t.clientX, t.clientY);
   };
 
-  // ── Listeners globaux pendant le drag ────────────────────────────────────────
   useEffect(() => {
     if (!dragging) return;
     const onMove_ = (e) => {
       const cx = e.clientX ?? e.touches?.[0]?.clientX;
       const cy = e.clientY ?? e.touches?.[0]?.clientY;
       if (cx == null) return;
-      const raw = { x: cx - offsetRef.current.x, y: cy - offsetRef.current.y };
-      const clamped = clampPos(raw.x, raw.y);
+      const clamped = clampPos(cx - offsetRef.current.x, cy - offsetRef.current.y);
       posRef.current = clamped;
       setPos(clamped);
       onMove(clamped.x, clamped.y);
@@ -1271,48 +1206,40 @@ function PointPopup({ pt, screenX, screenY, index, illuminant, onClose, onMove, 
     };
   }, [dragging, onMove]);
 
-  // Sync posRef quand pos change depuis l'extérieur
   useEffect(() => { posRef.current = pos; }, [pos]);
 
-  const s       = illuminant ? computeSaturation(pt, illuminant) : null;
-  const satPct  = s ? parseFloat(s.sat) : 0;
+  const s        = illuminant ? computeSaturation(pt, illuminant) : null;
+  const satPct   = s ? parseFloat(s.sat) : 0;
   const domColor = s?.domWl ? nmToRGB(s.domWl) : null;
-  const label   = pt.name || `Point #${index + 1}`;
-
-  // Petite pastille de couleur représentative (wavelength dominante)
-  const dotColor = domColor || "var(--text-muted)";
 
   return (
     <div
       ref={popupRef}
       style={{
         position: "fixed",
-        left: pos.x,
-        top: pos.y,
+        left: pos.x, top: pos.y,
         zIndex: 200,
-        width: 240,
+        width: 196,                          /* ← réduit de 240 → 196 */
         background: "var(--bg-card)",
         border: "1px solid var(--border)",
-        borderRadius: 12,
+        borderRadius: 10,
         boxShadow: dragging
-          ? "0 20px 60px rgba(0,0,0,0.28), 0 2px 8px rgba(0,0,0,0.12)"
-          : "0 8px 32px rgba(0,0,0,0.16), 0 1px 4px rgba(0,0,0,0.08)",
-        fontSize: 12,
+          ? "0 16px 48px rgba(0,0,0,0.24)"
+          : "0 6px 24px rgba(0,0,0,0.14)",
+        fontSize: 11,
         userSelect: "none",
         touchAction: "none",
         transition: dragging ? "none" : "box-shadow 0.2s ease",
         overflow: "hidden",
       }}
     >
-      {/* ── Barre de titre — zone de drag ── */}
+      {/* ── En-tête drag ── */}
       <div
         onMouseDown={handleHeaderMouseDown}
         onTouchStart={handleHeaderTouchStart}
         style={{
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-          padding: "9px 10px 8px",
+          display: "flex", alignItems: "center", gap: 6,
+          padding: "7px 8px 6px",
           background: "var(--bg)",
           borderBottom: "1px solid var(--border)",
           cursor: dragging ? "grabbing" : "grab",
@@ -1320,13 +1247,12 @@ function PointPopup({ pt, screenX, screenY, index, illuminant, onClose, onMove, 
       >
         {/* Pastille couleur */}
         <div style={{
-          width: 10, height: 10, borderRadius: "50%", flexShrink: 0,
-          background: dotColor,
+          width: 8, height: 8, borderRadius: "50%", flexShrink: 0,
+          background: domColor || "var(--text-muted)",
           border: "1.5px solid var(--border)",
-          boxShadow: domColor ? `0 0 0 2px ${domColor}33` : "none",
         }} />
 
-        {/* Nom (éditable inline) */}
+        {/* Nom éditable */}
         <input
           type="text"
           placeholder={`Point #${index + 1}`}
@@ -1335,40 +1261,32 @@ function PointPopup({ pt, screenX, screenY, index, illuminant, onClose, onMove, 
           onTouchStart={e => e.stopPropagation()}
           onChange={e => onNameChange(e.target.value)}
           style={{
-            flex: 1,
-            fontSize: 12, fontWeight: 600,
+            flex: 1, fontSize: 11, fontWeight: 600,
             border: "none", background: "transparent", outline: "none",
-            color: "var(--text)", padding: 0,
-            cursor: "text",
+            color: "var(--text)", padding: 0, cursor: "text",
           }}
         />
 
-        {/* Icône drag (pointillés) */}
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" style={{ opacity: 0.3, flexShrink: 0 }}>
+        {/* Icône drag */}
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" style={{ opacity: 0.25, flexShrink: 0 }}>
           <circle cx="3.5" cy="3.5" r="1.2" fill="currentColor"/>
           <circle cx="8.5" cy="3.5" r="1.2" fill="currentColor"/>
           <circle cx="3.5" cy="8.5" r="1.2" fill="currentColor"/>
           <circle cx="8.5" cy="8.5" r="1.2" fill="currentColor"/>
         </svg>
 
-        {/* Boutons actions */}
-        <div style={{ display: "flex", gap: 2, alignItems: "center" }}>
+        {/* Boutons */}
+        <div style={{ display: "flex", gap: 1, alignItems: "center" }}>
           <button
             onMouseDown={e => e.stopPropagation()}
             onTouchStart={e => e.stopPropagation()}
             onClick={onDelete}
-            title="Supprimer ce point"
-            style={{
-              background: "none", border: "none", cursor: "pointer",
-              width: 22, height: 22, borderRadius: 5,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "rgba(200,60,60,0.7)", fontSize: 13,
-              transition: "background 0.1s",
-            }}
+            title="Supprimer"
+            style={{ background: "none", border: "none", cursor: "pointer", width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", color: "rgba(200,60,60,0.7)" }}
             onMouseEnter={e => e.currentTarget.style.background = "rgba(200,60,60,0.1)"}
             onMouseLeave={e => e.currentTarget.style.background = "none"}
           >
-            <svg width="12" height="12" viewBox="0 0 14 14" fill="none">
+            <svg width="11" height="11" viewBox="0 0 14 14" fill="none">
               <path d="M2 3.5h10M5.5 3.5V2.5a.5.5 0 01.5-.5h2a.5.5 0 01.5.5v1M6 6.5v4M8 6.5v4M3 3.5l.7 7.2A1 1 0 004.7 12h4.6a1 1 0 001-.8L11 3.5" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           </button>
@@ -1377,37 +1295,25 @@ function PointPopup({ pt, screenX, screenY, index, illuminant, onClose, onMove, 
             onTouchStart={e => e.stopPropagation()}
             onClick={onClose}
             title="Fermer"
-            style={{
-              background: "none", border: "none", cursor: "pointer",
-              width: 22, height: 22, borderRadius: 5,
-              display: "flex", alignItems: "center", justifyContent: "center",
-              color: "var(--text-muted)", fontSize: 16, lineHeight: 1,
-              transition: "background 0.1s",
-            }}
+            style={{ background: "none", border: "none", cursor: "pointer", width: 20, height: 20, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center", color: "var(--text-muted)", fontSize: 14, lineHeight: 1 }}
             onMouseEnter={e => e.currentTarget.style.background = "var(--bg-card)"}
             onMouseLeave={e => e.currentTarget.style.background = "none"}
           >×</button>
         </div>
       </div>
 
-      {/* ── Corps ── */}
-      <div style={{ padding: "10px 12px", display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* ── Corps compact ── */}
+      <div style={{ padding: "8px 10px", display: "flex", flexDirection: "column", gap: 7 }}>
 
-        {/* Coordonnées CIE xy */}
-        <div style={{
-          display: "grid", gridTemplateColumns: "1fr 1fr",
-          gap: 6,
-        }}>
+        {/* Coordonnées */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 5 }}>
           {[["x", pt.x], ["y", pt.y]].map(([axis, val]) => (
             <div key={axis} style={{
-              background: "var(--bg)",
-              border: "1px solid var(--border)",
-              borderRadius: 7,
-              padding: "6px 10px",
-              textAlign: "center",
+              background: "var(--bg)", border: "1px solid var(--border)",
+              borderRadius: 6, padding: "4px 8px", textAlign: "center",
             }}>
-              <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2, fontWeight: 500, letterSpacing: "0.05em", textTransform: "uppercase" }}>{axis}</div>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
+              <div style={{ fontSize: 9, color: "var(--text-muted)", marginBottom: 1, fontWeight: 600, letterSpacing: "0.05em", textTransform: "uppercase" }}>{axis}</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
                 {val.toFixed(4)}
               </div>
             </div>
@@ -1421,117 +1327,104 @@ function PointPopup({ pt, screenX, screenY, index, illuminant, onClose, onMove, 
             onTouchStart={e => e.stopPropagation()}
             onClick={onToggleSat}
             style={{
-              width: "100%", fontSize: 12, fontWeight: 600,
-              padding: "8px 0", borderRadius: 7, cursor: "pointer",
+              width: "100%", fontSize: 11, fontWeight: 600,
+              padding: "6px 0", borderRadius: 6, cursor: "pointer",
               border: "1px solid var(--border)",
               background: "var(--bg)", color: "var(--text)",
-              display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+              display: "flex", alignItems: "center", justifyContent: "center", gap: 5,
               transition: "background 0.15s, border-color 0.15s",
             }}
             onMouseEnter={e => { e.currentTarget.style.background = "var(--bg-card)"; e.currentTarget.style.borderColor = "var(--text-muted)"; }}
             onMouseLeave={e => { e.currentTarget.style.background = "var(--bg)"; e.currentTarget.style.borderColor = "var(--border)"; }}
           >
-            <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+            <svg width="12" height="12" viewBox="0 0 13 13" fill="none">
               <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" strokeWidth="1.3"/>
               <circle cx="6.5" cy="6.5" r="2" stroke="currentColor" strokeWidth="1.3"/>
             </svg>
             Saturation
           </button>
         ) : s ? (
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {/* Distances d1/d2 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {/* d1 / d2 */}
             <div style={{
               background: "var(--bg)", border: "1px solid var(--border)",
-              borderRadius: 7, padding: "8px 10px",
-              display: "grid", gridTemplateColumns: "1fr 1fr", gap: 4,
+              borderRadius: 6, padding: "6px 8px",
+              display: "grid", gridTemplateColumns: "1fr 1fr", gap: 3,
             }}>
               {[
                 ["d₁", s.d1, illuminant ? `${illuminant} → ${pt.name || `#${index+1}`}` : ""],
                 ["d₂", s.d2, `${pt.name || `#${index+1}`} → locus`],
               ].map(([lbl, val, sub]) => (
                 <div key={lbl}>
-                  <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 1 }}>{lbl}</div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{val}</div>
-                  <div style={{ fontSize: 9, color: "var(--text-muted)", lineHeight: 1.3, marginTop: 1 }}>{sub}</div>
+                  <div style={{ fontSize: 8, color: "var(--text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 1 }}>{lbl}</div>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>{val}</div>
+                  <div style={{ fontSize: 8, color: "var(--text-muted)", lineHeight: 1.3, marginTop: 1 }}>{sub}</div>
                 </div>
               ))}
             </div>
 
-            {/* Barre de saturation avec ✕ */}
+            {/* Barre saturation */}
             <div style={{ position: "relative" }}>
               <button
                 onMouseDown={e => e.stopPropagation()}
                 onTouchStart={e => e.stopPropagation()}
                 onClick={onToggleSat}
-                title="Masquer la saturation"
+                title="Masquer"
                 style={{
-                  position: "absolute", top: -6, right: -6, zIndex: 2,
-                  width: 18, height: 18, borderRadius: "50%",
+                  position: "absolute", top: -5, right: -5, zIndex: 2,
+                  width: 16, height: 16, borderRadius: "50%",
                   background: "var(--bg-card)", border: "1px solid var(--border)",
                   cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 10, color: "var(--text-muted)", lineHeight: 1,
+                  fontSize: 9, color: "var(--text-muted)", lineHeight: 1,
                 }}
               >×</button>
-              <div style={{ borderRadius: 7, overflow: "hidden", border: "1px solid var(--border)" }}>
-                {/* Track */}
-                <div style={{ height: 6, background: "var(--bg)", position: "relative" }}>
+              <div style={{ borderRadius: 6, overflow: "hidden", border: "1px solid var(--border)" }}>
+                <div style={{ height: 4, background: "var(--bg)", position: "relative" }}>
                   <div style={{
                     position: "absolute", left: 0, top: 0, height: "100%",
                     width: `${satPct}%`,
                     background: domColor || "var(--text-muted)",
-                    borderRadius: "0 4px 4px 0",
+                    borderRadius: "0 3px 3px 0",
                     transition: "width 0.4s ease",
                   }} />
                 </div>
-                {/* Label */}
                 <div style={{
-                  padding: "6px 10px",
-                  background: domColor ? `${domColor}18` : "var(--bg)",
-                  display: "flex", alignItems: "baseline", justifyContent: "center", gap: 4,
+                  padding: "5px 8px",
+                  background: domColor ? `${domColor}14` : "var(--bg)",
+                  display: "flex", alignItems: "baseline", justifyContent: "center", gap: 3,
                 }}>
-                  <span style={{ fontSize: 22, fontWeight: 800, color: "var(--text)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em" }}>{s.sat}%</span>
-                  <span style={{ fontSize: 10, color: "var(--text-muted)" }}>saturation</span>
+                  <span style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.03em" }}>{s.sat}%</span>
+                  <span style={{ fontSize: 9, color: "var(--text-muted)" }}>sat.</span>
                 </div>
               </div>
             </div>
 
-            {/* λ dominante / complémentaire */}
+            {/* λ dominante */}
             {s.domWl !== null && (
               <div style={{
-                background: domColor ? `${domColor}14` : "var(--bg)",
-                border: `1px solid ${domColor ? `${domColor}44` : "var(--border)"}`,
-                borderRadius: 7, padding: "8px 10px",
+                background: domColor ? `${domColor}12` : "var(--bg)",
+                border: `1px solid ${domColor ? `${domColor}40` : "var(--border)"}`,
+                borderRadius: 6, padding: "6px 8px",
                 display: "flex", alignItems: "center", justifyContent: "space-between",
               }}>
                 <div>
-                  <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 2 }}>
-                    {s.complementary ? "λ complémentaire" : "λ dominante"}
+                  <div style={{ fontSize: 8, color: "var(--text-muted)", fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", marginBottom: 1 }}>
+                    {s.complementary ? "λ compl." : "λ dom."}
                   </div>
-                  {s.complementary && (
-                    <div style={{ fontSize: 9, color: "var(--text-muted)", marginTop: 1 }}>(pourpre — opposé)</div>
-                  )}
+                  {s.complementary && <div style={{ fontSize: 8, color: "var(--text-muted)" }}>(pourpre)</div>}
                 </div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  {domColor && (
-                    <div style={{ width: 14, height: 14, borderRadius: 3, background: domColor, flexShrink: 0, border: "1px solid rgba(0,0,0,0.1)" }} />
-                  )}
-                  <span style={{ fontSize: 18, fontWeight: 800, color: "var(--text)", fontVariantNumeric: "tabular-nums", letterSpacing: "-0.02em" }}>
-                    {s.domWl} <span style={{ fontSize: 11, fontWeight: 500, color: "var(--text-muted)" }}>nm</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
+                  {domColor && <div style={{ width: 12, height: 12, borderRadius: 3, background: domColor, border: "1px solid rgba(0,0,0,0.1)" }} />}
+                  <span style={{ fontSize: 15, fontWeight: 800, color: "var(--text)", fontVariantNumeric: "tabular-nums" }}>
+                    {s.domWl} <span style={{ fontSize: 10, fontWeight: 500, color: "var(--text-muted)" }}>nm</span>
                   </span>
                 </div>
               </div>
             )}
-
-            {/* Pas d'illuminant sélectionné */}
-            {!illuminant && (
-              <div style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", padding: "4px 0" }}>
-                Sélectionner un illuminant pour calculer la saturation
-              </div>
-            )}
           </div>
         ) : (
-          <div style={{ fontSize: 10, color: "var(--text-muted)", textAlign: "center", padding: "4px 0" }}>
-            Sélectionner un illuminant pour calculer la saturation
+          <div style={{ fontSize: 9, color: "var(--text-muted)", textAlign: "center", padding: "3px 0" }}>
+            Sélectionner un illuminant
           </div>
         )}
       </div>
@@ -1546,29 +1439,26 @@ export default function AppCouleur() {
   const [tab, setTab] = useState("diagram");
   const [userPoints, setUserPoints] = useState([]);
   const diagramRef = useRef(null);
-  const toggleSat = (id) => setUserPoints(prev => prev.map(p => p.id === id ? { ...p, showSat: !p.showSat } : p));
+  const toggleSat   = (id) => setUserPoints(prev => prev.map(p => p.id === id ? { ...p, showSat: !p.showSat } : p));
   const setPointName = (id, name) => setUserPoints(prev => prev.map(p => p.id === id ? { ...p, name } : p));
   const [showReticle, setShowReticle] = useState(true);
   const [showPlanckian, setShowPlanckian] = useState(false);
-  // Popups flottants déplaçables — un par point ouvert
-  const [pointPopups, setPointPopups] = useState([]); // [{ id, x, y }]
+  const [pointPopups, setPointPopups] = useState([]);
   const closePopup = (id) => setPointPopups(prev => prev.filter(p => p.id !== id));
   const movePopup  = (id, x, y) => setPointPopups(prev => prev.map(p => p.id === id ? { ...p, x, y } : p));
-  // Conserver popupPointId pour la compatibilité avec onDblClickPoint (ouvre le même popup)
-  const setPopupPointId = (id) => {
+  const openPopup  = (id, clientX, clientY) => {
     setPointPopups(prev => {
       if (prev.find(p => p.id === id)) return prev;
-      return [...prev, { id, x: window.innerWidth / 2 - 110, y: window.innerHeight / 2 - 100 }];
+      return [...prev, { id, x: clientX + 14, y: clientY - 24 }];
     });
   };
   const [macadamFactor, setMacadamFactor] = useState(0);
   const [showColorFill, setShowColorFill] = useState(true);
-  const [showSidebar, setShowSidebar] = useState(true);
   const [annotations, setAnnotations] = useState([]);
 
   const tabs = [
     { id: "diagram", label: "Diagramme de chromaticité" },
-    { id: "info", label: "À propos" },
+    { id: "info",    label: "À propos" },
   ];
 
   const exportPNG = () => {
@@ -1643,38 +1533,29 @@ export default function AppCouleur() {
   return (
     <div style={{ fontFamily: "system-ui, sans-serif", color: "var(--text)", maxWidth: 1040, margin: "0 auto", padding: "1rem 0" }}>
       <style>{`@keyframes fadeInHint { from { opacity:0; transform:translate(-50%,-110%) } to { opacity:1; transform:translate(-50%,-120%) } }`}</style>
+
       {/* En-tête */}
       <div style={{ marginBottom: "1.25rem" }}>
         <h2 style={{ fontSize: 20, fontWeight: 500, margin: "0 0 4px", color: "var(--text)" }}>Espace colorimétrique CIE 1931</h2>
-        <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
-          Diagramme de chromaticité xy · Observateur standard 2°
-        </p>
+        <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>Diagramme de chromaticité xy · Observateur standard 2°</p>
       </div>
 
       {/* Onglets */}
       <div style={{ display: "flex", gap: 0, marginBottom: "1rem", borderBottom: `0.5px solid var(--border)` }}>
         {tabs.map(t => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            style={{
-              background: "none", border: "none", padding: "8px 16px", cursor: "pointer",
-              fontSize: 13, fontWeight: tab === t.id ? 500 : 400,
-              color: tab === t.id ? "var(--text)" : "var(--text-muted)",
-              borderBottom: tab === t.id ? `2px solid var(--text)` : "2px solid transparent",
-              marginBottom: -1,
-            }}
-          >{t.label}</button>
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            background: "none", border: "none", padding: "8px 16px", cursor: "pointer",
+            fontSize: 13, fontWeight: tab === t.id ? 500 : 400,
+            color: tab === t.id ? "var(--text)" : "var(--text-muted)",
+            borderBottom: tab === t.id ? `2px solid var(--text)` : "2px solid transparent",
+            marginBottom: -1,
+          }}>{t.label}</button>
         ))}
-        <button
-          onClick={exportPNG}
-          style={{
-            marginLeft: "auto", background: "none", border: `0.5px solid var(--border)`,
-            padding: "6px 14px", cursor: "pointer", fontSize: 12, fontWeight: 500,
-            color: "var(--text)", borderRadius: 5, display: "flex", alignItems: "center", gap: 5,
-            marginBottom: 4,
-          }}
-        >⬇ Exporter</button>
+        <button onClick={exportPNG} style={{
+          marginLeft: "auto", background: "none", border: `0.5px solid var(--border)`,
+          padding: "6px 14px", cursor: "pointer", fontSize: 12, fontWeight: 500,
+          color: "var(--text)", borderRadius: 5, display: "flex", alignItems: "center", gap: 5, marginBottom: 4,
+        }}>⬇ Exporter</button>
       </div>
 
       {tab === "diagram" && (
@@ -1699,94 +1580,29 @@ export default function AppCouleur() {
             )}
           </div>
 
-          {/* Ligne principale */}
-          <div style={{ display: "flex", gap: "1rem", alignItems: "flex-start" }}>
-            <div style={{ flex: "1 1 0", minWidth: 0, position: "relative" }} data-canvas-wrapper="1">
-              <button
-                onClick={() => setShowSidebar(v => !v)}
-                title={showSidebar ? "Masquer le panneau" : "Afficher le panneau"}
-                style={{
-                  position: "absolute", top: 8, right: 8, zIndex: 5,
-                  background: "var(--bg-card)", border: `0.5px solid var(--border)`,
-                  borderRadius: 5, padding: "3px 8px", fontSize: 11, cursor: "pointer",
-                  color: "var(--text)", fontWeight: 500,
-                  boxShadow: "0 1px 4px rgba(0,0,0,0.08)"
-                }}
-              >{showSidebar ? "◀" : "▶"}</button>
-              <ChromaticityDiagram
-                ref={diagramRef}
-                illuminant={illuminant}
-                onHover={setHovered}
-                userPoints={userPoints}
-                showReticle={showReticle}
-                onToggleReticle={() => setShowReticle(v => !v)}
-                showPlanckian={showPlanckian}
-                onTogglePlanckian={() => setShowPlanckian(v => !v)}
-                macadamFactor={macadamFactor}
-                onSetMacadam={setMacadamFactor}
-                showColorFill={showColorFill}
-                onToggleColorFill={() => setShowColorFill(v => !v)}
-                onDblClickPoint={(id) => setPopupPointId(id)}
-                onClickPoint={(id, clientX, clientY) => {
-                  setPointPopups(prev => {
-                    if (prev.find(p => p.id === id)) return prev; // déjà ouvert
-                    return [...prev, {
-                      id,
-                      x: clientX + 16,
-                      y: clientY - 30,
-                    }];
-                  });
-                }}
-                allSatOn={userPoints.length > 0 && userPoints.every(p => p.showSat)}
-                annotations={annotations}
-                onAnnotationsChange={setAnnotations}
-                onToggleAllSat={() => { const allOn = userPoints.every(p => p.showSat); setUserPoints(prev => prev.map(p => ({ ...p, showSat: !allOn }))); }}
-                onAddPoint={(p) => setUserPoints(prev => [...prev, { ...p, id: Date.now(), name: "" }])}
-                onMovePoint={(id, x, y) => setUserPoints(prev => prev.map(p => p.id === id ? { ...p, x, y } : p))}
-              />
-            </div>
-
-            {/* Panneau points — droite : liste compacte, le détail est dans les popups */}
-            {showSidebar && (
-              <div style={{ width: 180, flexShrink: 0, display: "flex", flexDirection: "column", gap: 6, maxHeight: 780, overflowY: "auto" }}>
-                <p style={{ fontSize: 11, color: "var(--text-muted)", margin: "0 0 2px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>Points</p>
-                {userPoints.length === 0 ? (
-                  <p style={{ fontSize: 11, color: "var(--text-muted)", margin: 0, lineHeight: 1.5 }}>Double-cliquez sur le diagramme pour ajouter un point</p>
-                ) : (
-                  <>
-                    <button onClick={() => { setUserPoints([]); setPointPopups([]); }}
-                      style={{ fontSize: 11, fontWeight: 600, background: "rgba(220,50,50,0.08)", border: "1px solid rgba(200,40,40,0.3)", borderRadius: 5, padding: "4px 8px", cursor: "pointer", alignSelf: "stretch", color: "rgba(200,60,60,0.9)" }}
-                    >✕ Tout effacer</button>
-                    {[...userPoints].reverse().map((pt, ri) => {
-                      const i = userPoints.length - 1 - ri;
-                      const isOpen = pointPopups.some(p => p.id === pt.id);
-                      return (
-                        <button
-                          key={pt.id}
-                          onClick={() => setPopupPointId(pt.id)}
-                          style={{
-                            display: "flex", alignItems: "center", gap: 8, width: "100%",
-                            padding: "5px 8px", borderRadius: 6, cursor: "pointer", textAlign: "left",
-                            background: isOpen ? "var(--bg)" : "var(--bg-card)",
-                            border: isOpen ? `1px solid var(--border)` : `0.5px solid var(--border)`,
-                            boxShadow: isOpen ? "0 1px 4px rgba(0,0,0,0.08)" : "none",
-                          }}
-                        >
-                          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--text-muted)", minWidth: 20 }}>#{i+1}</span>
-                          <div style={{ flex: 1, overflow: "hidden" }}>
-                            <div style={{ fontSize: 11, fontWeight: 500, color: "var(--text)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                              {pt.name || `x ${pt.x.toFixed(3)}`}
-                            </div>
-                            <div style={{ fontSize: 10, color: "var(--text-muted)" }}>y = {pt.y.toFixed(4)}</div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </>
-                )}
-              </div>
-            )}
-          </div>
+          {/* Diagramme — pleine largeur, sans panneau droite */}
+          <ChromaticityDiagram
+            ref={diagramRef}
+            illuminant={illuminant}
+            onHover={setHovered}
+            userPoints={userPoints}
+            showReticle={showReticle}
+            onToggleReticle={() => setShowReticle(v => !v)}
+            showPlanckian={showPlanckian}
+            onTogglePlanckian={() => setShowPlanckian(v => !v)}
+            macadamFactor={macadamFactor}
+            onSetMacadam={setMacadamFactor}
+            showColorFill={showColorFill}
+            onToggleColorFill={() => setShowColorFill(v => !v)}
+            onDblClickPoint={(id) => openPopup(id, window.innerWidth / 2, window.innerHeight / 2)}
+            onClickPoint={(id, clientX, clientY) => openPopup(id, clientX, clientY)}
+            allSatOn={userPoints.length > 0 && userPoints.every(p => p.showSat)}
+            annotations={annotations}
+            onAnnotationsChange={setAnnotations}
+            onToggleAllSat={() => { const allOn = userPoints.every(p => p.showSat); setUserPoints(prev => prev.map(p => ({ ...p, showSat: !allOn }))); }}
+            onAddPoint={(p) => setUserPoints(prev => [...prev, { ...p, id: Date.now(), name: "" }])}
+            onMovePoint={(id, x, y) => setUserPoints(prev => prev.map(p => p.id === id ? { ...p, x, y } : p))}
+          />
         </div>
       )}
 
@@ -1795,7 +1611,7 @@ export default function AppCouleur() {
           <h3 style={{ fontSize: 15, fontWeight: 500, color: "var(--text)", margin: "0 0 8px" }}>Le modèle CIE 1931</h3>
           <p>L'espace colorimétrique CIE 1931 XYZ est fondé sur des expériences psychophysiques d'égalisation des couleurs à partir de trois primaires monochromatiques : 700 nm (rouge), 546,1 nm (vert) et 435,8 nm (bleu), frappant la fovéa sous un angle de 2°.</p>
           <p>Le diagramme de chromaticité xy est obtenu par projection : x = X/(X+Y+Z), y = Y/(X+Y+Z). Il représente la teinte et la saturation indépendamment de la luminance.</p>
-          <p>Le <em>spectrum locus</em> est la courbe enveloppant le diagramme, sur laquelle se trouvent toutes les couleurs monochromatiques. Les couleurs réelles d'un écran sont contenues dans un triangle (gamut) dont les sommets sont les primaires R, G, B.</p>
+          <p>Le <em>spectrum locus</em> est la courbe enveloppant le diagramme, sur laquelle se trouvent toutes les couleurs monochromatiques.</p>
           <div style={{ borderTop: `0.5px solid var(--border)`, paddingTop: 12, marginTop: 8, fontSize: 12 }}>
             <p style={{ margin: "0 0 4px" }}><strong style={{ color: "var(--text)" }}>Source :</strong> Mathieu Hébert, « Mesurer les couleurs », <em>Photoniques</em>, 2021, 106, pp.44–47</p>
             <p style={{ margin: "0 0 4px" }}><strong style={{ color: "var(--text)" }}>Données :</strong> CIE 015:2018, fonctions d'égalisation 2° CIE 1931</p>
@@ -1808,7 +1624,7 @@ export default function AppCouleur() {
         </div>
       )}
 
-      {/* ── Popups flottants draggables — un par point ── */}
+      {/* Popups flottants draggables */}
       {pointPopups.map(popup => {
         const pt = userPoints.find(p => p.id === popup.id);
         if (!pt) return null;
