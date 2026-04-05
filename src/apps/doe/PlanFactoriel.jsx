@@ -3,7 +3,6 @@ import { useTheme } from "../../ThemeContext";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { EXAMPLE_FILES } from "./exampleFiles";
 
-
 function classNames(...classes) {
   return classes.filter(Boolean).join(" ");
 }
@@ -292,9 +291,8 @@ const tdStyle = {
 };
 
 // ─── step 1 : facteurs ─────────────────────────────────────────────────────────
-function Step1({ factors, setFactors, useCenter, setUseCenter, nrep, setNrep, rname, setRname, runit, setRunit, onNext }) {
+function Step1({ factors, setFactors, useCenter, setUseCenter, nrep, setNrep, rname, setRname, runit, setRunit, onNext, onExampleLoaded }) {
   const [exIdx, setExIdx] = useState(-1);
-  const [setIdx, setSetIdx] = useState(0);
   const [loadedEx, setLoadedEx] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(null);
@@ -302,53 +300,33 @@ function Step1({ factors, setFactors, useCenter, setUseCenter, nrep, setNrep, rn
   const ne = 1 << factors.length;
   const total = ne + (useCenter ? nrep : 0);
 
-  // Nouveau format : experiments[] au niveau racine, sets pointent via response_index
-  // Extrait les réponses d'un set depuis ex.experiments
-  function extractResponses(ex, set) {
-    const ri = set.response_index ?? 0;
-    const yKey = `Y${ri + 1}`;
-    const sorted = [...ex.experiments].sort((a, b) => a.exp_no - b.exp_no);
-    return sorted.map((e) => e[yKey]);
-  }
-
-  // Détecte le nombre de répétitions : nb d'expériences ayant le même profil X1..Xn
   function detectReps(ex) {
     const n = ex.factors.length;
-    const ne = 1 << n;
-    return Math.round(ex.experiments.length / ne);
+    return Math.round(ex.experiments.length / (1 << n));
   }
 
   async function loadExample(i) {
-    setExIdx(i); setSetIdx(0); setLoading(true); setLoadError(null); setLoadedEx(null);
+    setExIdx(i); setLoading(true); setLoadError(null); setLoadedEx(null);
     try {
       const res = await fetch(`${import.meta.env.BASE_URL}data/${EXAMPLE_FILES[i].file}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const ex = await res.json();
       setLoadedEx(ex);
       setFactors(ex.factors.map((f) => ({ ...f })));
-      // rname/runit depuis la première réponse du premier set
       const resp0 = ex.responses[ex.sets[0].response_index ?? 0];
       setRname(resp0.name); setRunit(resp0.unit);
       setUseCenter(false);
+      // Stocker dans window pour Step2 (premier jeu par défaut)
       window.__exExperiments = ex.experiments;
       window.__exReps = detectReps(ex);
       window.__exResponseIndex = ex.sets[0].response_index ?? 0;
+      window.__exLoadedData = ex; // données complètes pour la sélection multi-jeux
+      onExampleLoaded(ex);
     } catch (e) {
       setLoadError(`Impossible de charger le fichier : ${e.message}`);
     } finally {
       setLoading(false);
     }
-  }
-
-  function applySet(si) {
-    if (!loadedEx) return;
-    setSetIdx(si);
-    const set = loadedEx.sets[si];
-    const resp = loadedEx.responses[set.response_index ?? 0];
-    setRname(resp.name); setRunit(resp.unit);
-    window.__exExperiments = loadedEx.experiments;
-    window.__exReps = detectReps(loadedEx);
-    window.__exResponseIndex = set.response_index ?? 0;
   }
 
   function addF()             { if (factors.length < 5) setFactors([...factors, { n: "Facteur " + (factors.length + 1), u: "", lo: "", mi: "", hi: "" }]); }
@@ -371,7 +349,7 @@ function Step1({ factors, setFactors, useCenter, setUseCenter, nrep, setNrep, rn
       {/* Exemples */}
       <Card>
         <SectionTitle>Charger un exemple</SectionTitle>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 10, marginBottom: exIdx >= 0 ? 12 : 0 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 10 }}>
           {EXAMPLE_FILES.map((ex, i) => (
             <div key={i} onClick={() => loadExample(i)} style={{
               border: exIdx === i ? `1.5px solid var(--text)` : "0.5px solid var(--border)",
@@ -379,6 +357,7 @@ function Step1({ factors, setFactors, useCenter, setUseCenter, nrep, setNrep, rn
               background: exIdx === i ? "var(--bg)" : "transparent",
               transition: "border-color 0.15s",
               opacity: loading && exIdx === i ? 0.6 : 1,
+              touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
             }}>
               <Badge>{ex.context}</Badge>
               {ex.real && <span style={{ display: "inline-block", marginLeft: 6, fontSize: 10, padding: "2px 7px", borderRadius: 8, background: T.amberBg, color: T.amber, fontWeight: 700, border: `0.5px solid ${T.amber}40`, verticalAlign: "middle" }}>données réelles</span>}
@@ -389,33 +368,14 @@ function Step1({ factors, setFactors, useCenter, setUseCenter, nrep, setNrep, rn
             </div>
           ))}
         </div>
-
         {loadError && (
-          <div style={{ color: T.red, fontSize: 12, padding: "8px 12px", background: T.redBg, borderRadius: 7, marginBottom: 8 }}>
+          <div style={{ color: T.red, fontSize: 12, padding: "8px 12px", background: T.redBg, borderRadius: 7, marginTop: 10 }}>
             {loadError}
           </div>
         )}
-
         {exIdx >= 0 && loadedEx && !loading && (
-          <div style={{ borderTop: "0.5px solid var(--border)", paddingTop: 12 }}>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 8, fontWeight: 500 }}>Jeu de données :</div>
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 6 }}>
-              {loadedEx.sets.map((s, si) => (
-                <button key={si} onClick={() => applySet(si)} style={{
-                  padding: "4px 12px", fontSize: 12, borderRadius: 6, cursor: "pointer",
-                  border: setIdx === si ? "1.5px solid var(--text)" : "0.5px solid var(--border)",
-                  background: setIdx === si ? "var(--text)" : "var(--bg-card)",
-                  color: setIdx === si ? "var(--bg)" : "var(--text-muted)",
-                  fontWeight: setIdx === si ? 600 : 400,
-                }}>
-                  {loadedEx.sets.length > 1 ? `Jeu ${"ABC"[si]}` : "Jeu unique"}
-                </button>
-              ))}
-            </div>
-            <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5 }}>
-              <strong style={{ color: "var(--text)" }}>{loadedEx.sets[setIdx].label}</strong>
-              {" — "}{loadedEx.sets[setIdx].hint}
-            </div>
+          <div style={{ borderTop: "0.5px solid var(--border)", paddingTop: 10, marginTop: 10, fontSize: 12, color: T.green }}>
+            ✓ <strong>{loadedEx.title}</strong> chargé — les jeux de données seront sélectionnables à l'étape suivante.
           </div>
         )}
       </Card>
@@ -484,30 +444,98 @@ function Step1({ factors, setFactors, useCenter, setUseCenter, nrep, setNrep, rn
 }
 
 // ─── step 2 : matrice ──────────────────────────────────────────────────────────
-function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses, centerResponses, setCenterResponses, onBack, onCalc }) {
+function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses, centerResponses, setCenterResponses, experiments, setExperiments, loadedEx, setLoadedEx, onBack, onCalc }) {
   const n = factors.length, ne = 1 << n;
   const allTerms = getTerms(n);
   const iTerms = allTerms.filter((t) => t.o >= 2);
   const [reps, setReps] = useState(1);
-  const [experiments, setExperiments] = useState(null); // format matrice complet
+  // Jeux sélectionnés : Set d'indices de sets
+  const [selectedSets, setSelectedSets] = useState(() => new Set([0]));
+
+  // Quand loadedEx change (nouveau fichier) : reset selectedSets au jeu 0
+  const prevLoadedExRef = useRef(null);
 
   useEffect(() => {
     const exExp  = window.__exExperiments  || null;
     const exReps = window.__exReps         || 1;
     const exRI   = window.__exResponseIndex ?? 0;
-    setReps(exReps);
-    setExperiments(exExp);
+
     if (exExp) {
-      // Reconstruire les réponses depuis experiments dans l'ordre d'arrivée (exp_no croissant)
+      // Nouveau chargement depuis un exemple
+      const detectedReps = Math.round(exExp.length / (1 << factors.length));
+      setReps(detectedReps);
+      setExperiments(exExp);
+      setSelectedSets(new Set([0])); // reset: jeu 0 par défaut
+      // Les réponses seront construites depuis buildMergedExperiments
       const sorted = [...exExp].sort((a, b) => a.exp_no - b.exp_no);
       const yKey = `Y${exRI + 1}`;
       setResponses(sorted.map((e) => String(e[yKey])));
+      setCenterResponses(Array(nrep).fill(""));
       window.__exExperiments = null; window.__exReps = null; window.__exResponseIndex = null;
-    } else {
-      setResponses(Array(ne * exReps).fill(""));
+    } else if (experiments) {
+      const detectedReps = Math.round(experiments.length / (1 << factors.length));
+      setReps(detectedReps);
+    } else if (responses.length === 0) {
+      setReps(1);
+      setResponses(Array(ne).fill(""));
+      setCenterResponses(Array(nrep).fill(""));
     }
-    setCenterResponses(Array(nrep).fill(""));
   }, []);
+
+  // Construit la matrice fusionnée à partir des jeux sélectionnés
+  function buildMergedExperiments() {
+    if (!loadedEx || !experiments) return experiments;
+    const setsArr = loadedEx.sets;
+    if (setsArr.length <= 1 || selectedSets.size <= 1) return experiments;
+    // Pour chaque jeu sélectionné, on copie les expériences en remplaçant Y par le bon index
+    const sorted = [...experiments].sort((a, b) => a.exp_no - b.exp_no);
+    const xKeys = Object.keys(sorted[0]).filter(k => /^X\d+$/.test(k)).sort();
+    const merged = [];
+    let globalNo = 1;
+    Array.from(selectedSets).sort().forEach((si) => {
+      const set = setsArr[si];
+      const ri = set.response_index ?? 0;
+      const yKey = `Y${ri + 1}`;
+      sorted.forEach((row) => {
+        merged.push({
+          exp_no: globalNo++,
+          run_order: row.run_order,
+          _set: si,        // tag pour colorer les lignes par jeu
+          _setLabel: setsArr.length > 1 ? `Jeu ${"ABC"[si]}` : "Jeu unique",
+          ...Object.fromEntries(xKeys.map(k => [k, row[k]])),
+          Y1: row[yKey],
+        });
+      });
+    });
+    return merged;
+  }
+
+  // Toggle un jeu (au moins 1 toujours sélectionné)
+  function toggleSet(si) {
+    setSelectedSets(prev => {
+      const next = new Set(prev);
+      if (next.has(si)) {
+        if (next.size === 1) return prev; // garder au moins 1
+        next.delete(si);
+      } else {
+        next.add(si);
+      }
+      // Reconstruire les réponses pour la sélection courante
+      if (loadedEx && experiments) {
+        const setsArr = loadedEx.sets;
+        const sorted = [...experiments].sort((a, b) => a.exp_no - b.exp_no);
+        const merged = [];
+        Array.from(next).sort().forEach((idx) => {
+          const set = setsArr[idx];
+          const ri = set.response_index ?? 0;
+          const yKey = `Y${ri + 1}`;
+          sorted.forEach(row => merged.push({ ...row, Y1: row[yKey] }));
+        });
+        setResponses(merged.map(r => String(r.Y1)));
+      }
+      return next;
+    });
+  }
 
   // Calcule les moyennes par combinaison (pour le modèle)
   function getMeans() {
@@ -543,10 +571,10 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
 
   // ── Mode matrice complète (experiments) ──────────────────────────────────────
   if (experiments) {
-    const sorted = [...experiments].sort((a, b) => a.exp_no - b.exp_no);
-    const xKeys = Object.keys(sorted[0]).filter(k => /^X\d+$/.test(k)).sort();
-    const yKeys = Object.keys(sorted[0]).filter(k => /^Y\d+$/.test(k)).sort();
-    const yKey = yKeys[0] || 'Y1';
+    const merged = buildMergedExperiments();
+    const sorted = [...merged].sort((a, b) => a.exp_no - b.exp_no);
+    const xKeys = Object.keys(experiments[0]).filter(k => /^X\d+$/.test(k)).sort();
+    const yKey = 'Y1';
     const combKey = (row) => xKeys.map(k => row[k]).join(',');
     const combGroups = {};
     sorted.forEach(row => {
@@ -554,6 +582,11 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
       if (!combGroups[key]) combGroups[key] = [];
       combGroups[key].push(row[yKey]);
     });
+    const multiSet = selectedSets.size > 1;
+    const setColors    = ["rgba(83,74,183,0.09)",  "rgba(15,110,86,0.09)",  "rgba(153,60,29,0.09)"];
+    const setColorsAlt = ["rgba(83,74,183,0.17)",  "rgba(15,110,86,0.17)",  "rgba(153,60,29,0.17)"];
+    const setAccents   = [T.purple, T.green, T.red];
+
     function handleCalcFromMatrix() {
       const means = [], combSeen = {};
       let SSe = 0, dfe = 0;
@@ -562,7 +595,6 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
         if (!combSeen[key]) combSeen[key] = [];
         combSeen[key].push(row[yKey]);
       });
-      // rawObs : toutes les observations brutes avec leur vecteur lv
       const rawObs = sorted.map(row => ({
         lv: xKeys.map(k => row[k]),
         y: row[yKey],
@@ -580,29 +612,65 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
       }
       onCalc(means, [], dfe > 0 ? { MSe: SSe / dfe, dfe } : null, rawObs);
     }
+
     return (
       <div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8, flexWrap: "wrap" }}>
           <h2 style={{ fontSize: 16, fontWeight: 500, color: "var(--text)", margin: 0 }}>Matrice d'expériences</h2>
           <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
             Plan 2{SUP[n]} — <strong>{sorted.length} essais</strong>
-            {reps > 1 ? ` · ${ne} comb. × ${reps} rép.` : ""}
-            {reps > 1 && <span style={{ color: T.green, fontWeight: 500 }}> · Moy. auto.</span>}
+            {reps > 1 && !multiSet ? ` · ${ne} comb. × ${reps} rép.` : ""}
+            {multiSet && ` · ${selectedSets.size} jeux fusionnés`}
           </span>
         </div>
+
+        {/* ── Sélecteur de jeux ── */}
+        {loadedEx && loadedEx.sets.length > 0 && (
+          <Card style={{ marginBottom: "0.5rem" }}>
+            <SectionTitle>Jeux de données</SectionTitle>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: multiSet ? 8 : 0 }}>
+              {loadedEx.sets.map((s, si) => {
+                const checked = selectedSets.has(si);
+                const accent = setAccents[si % setAccents.length];
+                return (
+                  <label key={si} onClick={() => toggleSet(si)} style={{
+                    display: "flex", alignItems: "flex-start", gap: 8, padding: "8px 12px",
+                    borderRadius: 8, cursor: "pointer", userSelect: "none",
+                    border: checked ? `1.5px solid ${accent}` : "0.5px solid var(--border)",
+                    background: checked ? setColors[si % setColors.length] : "var(--bg-card)",
+                    touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+                    flex: "1 1 200px",
+                  }}>
+                    <input type="checkbox" checked={checked} readOnly
+                      style={{ accentColor: accent, width: 15, height: 15, marginTop: 2, flexShrink: 0, pointerEvents: "none" }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: checked ? accent : "var(--text-muted)", marginBottom: 2 }}>
+                        {loadedEx.sets.length > 1 ? `Jeu ${"ABC"[si]}` : "Jeu unique"}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--text)", marginBottom: s.hint ? 2 : 0 }}>{s.label}</div>
+                      {s.hint && <div style={{ fontSize: 10, color: "var(--text-muted)", lineHeight: 1.4 }}>{s.hint}</div>}
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+            {multiSet && (
+              <div style={{ fontSize: 11, color: T.purple, background: "rgba(83,74,183,0.08)", borderRadius: 6, padding: "6px 10px", border: `1px solid ${T.purple}33` }}>
+                ✦ {selectedSets.size} jeux sélectionnés → <strong>{sorted.length} lignes</strong> fusionnées dans la matrice
+              </div>
+            )}
+          </Card>
+        )}
+
         <Card style={{ padding: 0, overflow: "hidden" }}>
           <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
-            <div style={{
-              maxHeight: "calc(10 * 33px + 36px)",
-              overflowY: "auto",
-              WebkitOverflowScrolling: "touch",
-              scrollbarWidth: "thin",
-            }}>
+            <div style={{ maxHeight: "calc(10 * 33px + 36px)", overflowY: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "thin" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
                 <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
                   <tr>
                     <th style={{ ...thStyle, fontSize: 10 }}>N°</th>
                     <th style={{ ...thStyle, fontSize: 10 }}>Ord.</th>
+                    {multiSet && <th style={{ ...thStyle, fontSize: 9 }}>Jeu</th>}
                     {factors.map((f, i) => (
                       <th key={i} style={{ ...thStyle, fontSize: 10 }}>
                         {xKeys[i]}<br />
@@ -615,7 +683,7 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
                       </th>
                     ))}
                     <th style={{ ...thStyle, color: T.purple, fontSize: 10 }}>{rname}{runit ? ` (${runit})` : ""}</th>
-                    {reps > 1 && <th style={{ ...thStyle, color: T.green, fontSize: 9 }}>Moy.</th>}
+                    {reps > 1 && !multiSet && <th style={{ ...thStyle, color: T.green, fontSize: 9 }}>Moy.</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -626,17 +694,23 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
                     const groupMean = grp.length > 0 ? grp.reduce((a, b) => a + b) / grp.length : null;
                     const rowsInGroup = sorted.filter(r => combKey(r) === key);
                     const isLastInGroup = rowsInGroup[rowsInGroup.length - 1] === row;
-                    const groupIdx = Object.keys(combGroups).indexOf(key);
+                    const setIdx = row._set ?? 0;
+                    const rowBg = multiSet
+                      ? (ri % 2 === 0 ? setColors[setIdx % setColors.length] : setColorsAlt[setIdx % setColorsAlt.length])
+                      : (Object.keys(combGroups).indexOf(key) % 2 === 0 ? "transparent" : "var(--bg-card)");
                     return (
-                      <tr key={ri} style={{ background: groupIdx % 2 === 0 ? "transparent" : "var(--bg-card)", height: 33 }}>
+                      <tr key={ri} style={{ background: rowBg, height: 33 }}>
                         <td style={{ ...tdStyle, color: "var(--text-muted)", fontSize: 10, padding: "3px 5px" }}>{row.exp_no}</td>
                         <td style={{ ...tdStyle, color: "var(--text-muted)", fontSize: 10, padding: "3px 5px" }}>{row.run_order}</td>
+                        {multiSet && (
+                          <td style={{ ...tdStyle, fontSize: 10, padding: "3px 4px", color: setAccents[setIdx % setAccents.length], fontWeight: 700 }}>
+                            {"ABC"[setIdx]}
+                          </td>
+                        )}
                         {lv.map((v, fi) => (
                           <td key={fi} style={{ ...tdStyle, color: v === 1 ? T.green : T.red, fontWeight: 600, padding: "3px 5px", fontSize: 11 }}>
                             {v === 1 ? "+1" : "−1"}
-                            <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 400, lineHeight: 1 }}>
-                              {v === 1 ? factors[fi].hi : factors[fi].lo}
-                            </div>
+                            <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 400, lineHeight: 1 }}>{v === 1 ? factors[fi].hi : factors[fi].lo}</div>
                           </td>
                         ))}
                         {iTerms.map((t, ti) => {
@@ -644,7 +718,7 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
                           return <td key={ti} style={{ ...tdStyle, color: "var(--text-muted)", fontWeight: 500, fontSize: 10, padding: "3px 4px" }}>{iv === 1 ? "+1" : "−1"}</td>;
                         })}
                         <td style={{ ...tdStyle, fontWeight: 500, fontSize: 11, padding: "3px 6px" }}>{(row[yKey]).toFixed(3)}</td>
-                        {reps > 1 && (
+                        {reps > 1 && !multiSet && (
                           <td style={{ ...tdStyle, fontWeight: 600, color: T.green, background: "var(--bg-card)", fontSize: 10, padding: "3px 5px" }}>
                             {isLastInGroup && groupMean !== null ? groupMean.toFixed(2) : ""}
                           </td>
@@ -656,7 +730,7 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
               </table>
             </div>
             {sorted.length > 10 && (
-              <div style={{ padding: "5px 10px", fontSize: 11, color: "var(--text-muted)", background: "var(--bg-card)", borderTop: "0.5px solid var(--border)", textAlign: "center" }}>
+              <div style={{ padding: "4px 10px", fontSize: 10, color: "var(--text-muted)", background: "var(--bg-card)", borderTop: "0.5px solid var(--border)", textAlign: "center" }}>
                 ↕ {sorted.length} lignes — faites défiler pour voir toutes les expériences
               </div>
             )}
@@ -1681,6 +1755,8 @@ export default function PlanFactoriel({ onBack }) {
   const [runit, setRunit]           = useState("");
   const [responses, setResponses]   = useState([]);
   const [centerResponses, setCenterResponses] = useState([]);
+  const [experiments, setExperiments] = useState(null); // matrice chargée depuis exemple
+  const [loadedEx, setLoadedEx] = useState(null);       // données JSON complètes (pour les jeux)
   const [C, setC]   = useState({});
   const [ys, setYs] = useState([]);
   const [yc, setYc] = useState([]);
@@ -1714,7 +1790,7 @@ export default function PlanFactoriel({ onBack }) {
     setStep(1); setMaxStep(1);
     setFactors([{ n: "Facteur 1", u: "", lo: "", mi: "", hi: "" }, { n: "Facteur 2", u: "", lo: "", mi: "", hi: "" }]);
     setUseCenter(false); setNrep(3); setRname("Y"); setRunit("");
-    setResponses([]); setCenterResponses([]);
+    setResponses([]); setCenterResponses([]); setExperiments(null); setLoadedEx(null);
     setC({}); setYs([]); setYc([]); setMse(null); setRawObs(null);
     window.__exResponses = null; window.__exReps = null;
   }
@@ -1740,6 +1816,7 @@ export default function PlanFactoriel({ onBack }) {
           rname={rname} setRname={setRname}
           runit={runit} setRunit={setRunit}
           onNext={() => { setStep(2); setMaxStep((m) => Math.max(m, 2)); }}
+          onExampleLoaded={(ex) => setLoadedEx(ex)}
         />
       )}
       {step === 2 && (
@@ -1749,6 +1826,8 @@ export default function PlanFactoriel({ onBack }) {
           rname={rname} runit={runit}
           responses={responses} setResponses={setResponses}
           centerResponses={centerResponses} setCenterResponses={setCenterResponses}
+          experiments={experiments} setExperiments={setExperiments}
+          loadedEx={loadedEx} setLoadedEx={setLoadedEx}
           onBack={() => setStep(1)} onCalc={handleCalc}
         />
       )}
