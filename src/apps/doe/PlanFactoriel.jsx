@@ -182,7 +182,44 @@ function loadExampleData(exFile) {
     ? { present: exFile.center_point.present, replicates: exFile.center_point.replicates }
     : { ...DEFAULT_CENTER };
   const md = exFile.model_default || computeDefaultModel(f);
-  return { factors: f, responses: r, centerPoint: cp, modelDefault: md };
+
+  // Construire la matrice depuis les runs du JSON
+  // Chaque run peut avoir plusieurs réplicats — on crée une ligne par réplicat
+  let matrix = null;
+  if (exFile.runs && exFile.runs.length > 0) {
+    matrix = [];
+    let rowId = 1;
+    exFile.runs.forEach(run => {
+      const reps = run.replicates || [];
+      reps.forEach(rep => {
+        const responses = {};
+        r.forEach(resp => {
+          responses[resp.id] = rep[resp.id] !== undefined ? rep[resp.id] : "";
+        });
+        matrix.push({
+          id: rowId++,
+          coded: { ...run.coded },
+          real: { ...run.real },
+          center: run.center || false,
+          responses,
+        });
+      });
+      // Si pas de réplicats définis, créer une ligne vide
+      if (reps.length === 0) {
+        const responses = {};
+        r.forEach(resp => { responses[resp.id] = ""; });
+        matrix.push({
+          id: rowId++,
+          coded: { ...run.coded },
+          real: { ...run.real },
+          center: run.center || false,
+          responses,
+        });
+      }
+    });
+  }
+
+  return { factors: f, responses: r, centerPoint: cp, modelDefault: md, matrix };
 }
 
 // ─── composant principal ──────────────────────────────────────────────────────
@@ -213,14 +250,14 @@ export default function PlanFactoriel() {
       const res = await fetch(ex.url);
       if (!res.ok) throw new Error(`HTTP ${res.status} — ${ex.url}`);
       const data = await res.json();
-      const { factors: f, responses: r, centerPoint: cp, modelDefault: md } = loadExampleData(data);
+      const { factors: f, responses: r, centerPoint: cp, modelDefault: md, matrix: m } = loadExampleData(data);
       setFactors(f);
       setResponses(r);
       setCenterPoint(cp);
       setModelDefault(md);
       setModelActive([...md]);
       setModelPreset("default");
-      setMatrix(null);
+      setMatrix(m);
       setLoadedExampleId(ex.file);
       setSidebarOpen(false);
     } catch (e) {
@@ -248,7 +285,9 @@ export default function PlanFactoriel() {
   };
 
   const buildMatrix = () => {
-    const m = genMatrix(factors, responses, centerPoint);
+    // Si une matrice a déjà été chargée depuis un exemple, on la conserve
+    // Sinon on génère une matrice vide
+    const m = matrix || genMatrix(factors, responses, centerPoint);
     const def = computeDefaultModel(factors);
     setMatrix(m);
     setModelDefault(def);
