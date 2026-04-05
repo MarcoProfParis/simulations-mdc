@@ -1,0 +1,39 @@
+{
+  "title": "Formulation nanoparticules — effets d'ordre 2 dominants",
+  "context": "4 facteurs · Taille moyenne (nm)",
+  "real": false,
+  "factors": [
+    {"n": "FB",                   "u": "",   "lo": "0.05", "mi": "", "hi": "0.15"},
+    {"n": "Tween 80",             "u": "",   "lo": "1.6",  "mi": "", "hi": "2.6"},
+    {" n": "%SA/L",               "u": "%",  "lo": "50",   "mi": "", "hi": "60"},
+    {"n": "Température stockage", "u": "°C", "lo": "4",    "mi": "", "hi": "25"}
+  ],
+  "responses": [
+    {"name": "Taille moyenne", "unit": "nm"}
+  ],
+  "sets": [
+    {
+      "label": "Plan 2⁴ sans répétition — 16 essais",
+      "hint": "Interactions d'ordre 2 dominantes (α₁₂≈30, α₂₃≈−25, α₁₄≈18) · Modèle quadratique optimal · Cubique saturé",
+      "response_index": 0
+    }
+  ],
+  "experiments": [
+    {"exp_no": 1,  "run_order": 8,  "X1": -1, "X2": -1, "X3": -1, "X4": -1, "Y1": 366.886},
+    {"exp_no": 2,  "run_order": 10, "X1": -1, "X2": -1, "X3": -1, "X4":  1, "Y1": 322.096},
+    {"exp_no": 3,  "run_order": 6,  "X1": -1, "X2": -1, "X3":  1, "X4": -1, "Y1": 427.176},
+    {"exp_no": 4,  "run_order": 7,  "X1": -1, "X2": -1, "X3":  1, "X4":  1, "Y1": 380.426},
+    {"exp_no": 5,  "run_order": 15, "X1": -1, "X2":  1, "X3": -1, "X4": -1, "Y1": 324.116},
+    {"exp_no": 6,  "run_order": 11, "X1": -1, "X2":  1, "X3": -1, "X4":  1, "Y1": 268.033},
+    {"exp_no": 7,  "run_order": 13, "X1": -1, "X2":  1, "X3":  1, "X4": -1, "Y1": 291.400},
+    {"exp_no": 8,  "run_order": 9,  "X1": -1, "X2":  1, "X3":  1, "X4":  1, "Y1": 245.520},
+    {"exp_no": 9,  "run_order": 2,  "X1":  1, "X2": -1, "X3": -1, "X4": -1, "Y1": 316.894},
+    {"exp_no": 10, "run_order": 3,  "X1":  1, "X2": -1, "X3": -1, "X4":  1, "Y1": 322.593},
+    {"exp_no": 11, "run_order": 14, "X1":  1, "X2": -1, "X3":  1, "X4": -1, "Y1": 383.381},
+    {"exp_no": 12, "run_order": 16, "X1":  1, "X2": -1, "X3":  1, "X4":  1, "Y1": 405.302},
+    {"exp_no": 13, "run_order": 5,  "X1":  1, "X2":  1, "X3": -1, "X4": -1, "Y1": 389.272},
+    {"exp_no": 14, "run_order": 12, "X1":  1, "X2":  1, "X3": -1, "X4":  1, "Y1": 414.114},
+    {"exp_no": 15, "run_order": 1,  "X1":  1, "X2":  1, "X3":  1, "X4": -1, "Y1": 360.236},
+    {"exp_no": 16, "run_order": 4,  "X1":  1, "X2":  1, "X3":  1, "X4":  1, "Y1": 377.224}
+  ]
+}
