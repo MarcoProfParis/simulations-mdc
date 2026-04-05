@@ -244,15 +244,18 @@ export default function PlanFactoriel() {
   const [loadedExampleId, setLoadedExampleId] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [importError, setImportError] = useState(null);
+  const [importedExamples, setImportedExamples] = useState([]);
   const [editMode, setEditMode] = useState(false);
   const [editMeta, setEditMeta] = useState({ id: "", title: "", context: "", difficulty: "débutant", real_data: false, source: "" });
 
   const loadExample = async (ex) => {
     setLoadError(null);
     try {
-      const res = await fetch(ex.url);
-      if (!res.ok) throw new Error(`HTTP ${res.status} — ${ex.url}`);
-      const data = await res.json();
+      // Exemples importés : données déjà embarquées dans _data
+      const data = ex._data ? ex._data : await fetch(ex.url).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${ex.url}`);
+        return r.json();
+      });
       const { factors: f, responses: r, centerPoint: cp, modelDefault: md, matrix: m } = loadExampleData(data);
       setFactors(f);
       setResponses(r);
@@ -288,9 +291,10 @@ export default function PlanFactoriel() {
   const loadForEdit = async (ex) => {
     setLoadError(null);
     try {
-      const res = await fetch(ex.url);
-      if (!res.ok) throw new Error(`HTTP ${res.status} — ${ex.url}`);
-      const data = await res.json();
+      const data = ex._data ? ex._data : await fetch(ex.url).then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status} — ${ex.url}`);
+        return r.json();
+      });
       const { factors: f, responses: r, centerPoint: cp, modelDefault: md, matrix: m } = loadExampleData(data);
       setFactors(f);
       setResponses(r);
@@ -350,7 +354,28 @@ export default function PlanFactoriel() {
           setImportError(errors.join(" · "));
           return;
         }
-        // Import valide
+        // Créer l'entrée exemple à partir des métadonnées
+        const newEx = {
+          file: file.name,
+          url: null,
+          title: data.meta?.title || file.name.replace(".json", ""),
+          context: data.meta?.context || `${data.factors.length} facteurs`,
+          difficulty: data.meta?.difficulty || "débutant",
+          real_data: data.meta?.real_data ?? false,
+          _data: data, // données embarquées directement
+          imported: true,
+        };
+        // Éviter les doublons (même nom de fichier)
+        setImportedExamples(prev => {
+          const exists = prev.findIndex(e => e.file === file.name);
+          if (exists >= 0) {
+            const updated = [...prev];
+            updated[exists] = newEx;
+            return updated;
+          }
+          return [...prev, newEx];
+        });
+        // Charger directement comme un exemple normal
         const { factors: f, responses: r, centerPoint: cp, modelDefault: md, matrix: m } = loadExampleData(data);
         setFactors(f);
         setResponses(r);
@@ -360,15 +385,6 @@ export default function PlanFactoriel() {
         setModelPreset("default");
         setMatrix(m);
         setLoadedExampleId(file.name);
-        setEditMeta({
-          id: data.meta?.id || file.name.replace(".json", ""),
-          title: data.meta?.title || "",
-          context: data.meta?.context || "",
-          difficulty: data.meta?.difficulty || "débutant",
-          real_data: data.meta?.real_data ?? false,
-          source: data.meta?.source || "",
-        });
-        setEditMode(true);
         setSidebarOpen(false);
         setPart(1);
       } catch (err) {
@@ -672,6 +688,52 @@ export default function PlanFactoriel() {
                       </div>
                     )}
                     </div>
+
+                    {/* Exemples importés */}
+                    {importedExamples.length > 0 && (
+                      <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
+                        <div className="flex items-center justify-between mb-3">
+                          <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-400 dark:text-indigo-500">Importés</p>
+                          <button onClick={() => setImportedExamples([])}
+                            className="text-[10px] text-gray-400 hover:text-red-500 transition-colors">
+                            Tout supprimer
+                          </button>
+                        </div>
+                        <div className="flex flex-col gap-2">
+                          {importedExamples.map((ex) => (
+                            <div key={ex.file} className={`rounded-lg border transition-all ${
+                              loadedExampleId === ex.file
+                                ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-400"
+                                : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-500"
+                            }`}>
+                              <button onClick={() => loadExample(ex)} className="w-full text-left px-3 pt-2.5 pb-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-lg transition-colors">
+                                <div className="flex items-start justify-between gap-2 mb-1">
+                                  <span className="text-xs font-medium text-gray-900 dark:text-white leading-tight">{ex.title}</span>
+                                  <span className="shrink-0 text-[10px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 rounded-full px-1.5 py-0.5">importé</span>
+                                </div>
+                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1.5">{ex.context}</p>
+                                <span className={`inline-block text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${diffBadgeCls[ex.difficulty] || diffBadgeCls["débutant"]}`}>
+                                  {ex.difficulty}
+                                </span>
+                              </button>
+                              <div className="border-t border-gray-100 dark:border-gray-700 px-3 py-1.5 flex justify-between items-center">
+                                <button onClick={() => setImportedExamples(prev => prev.filter(e => e.file !== ex.file))}
+                                  className="text-[11px] text-red-400 hover:text-red-600 transition-colors">
+                                  Supprimer
+                                </button>
+                                <button onClick={() => loadForEdit(ex)}
+                                  className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
+                                    <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+                                  </svg>
+                                  Éditer
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </DialogPanel>
               </div>
