@@ -1,0 +1,107 @@
+{
+  "title": "Formulation d'un revêtement",
+  "context": "4 facteurs · Viscosité",
+  "factors": [
+    {
+      "n": "Température",
+      "u": "°C",
+      "lo": "20",
+      "mi": "30",
+      "hi": "40"
+    },
+    {
+      "n": "pH",
+      "u": "",
+      "lo": "5",
+      "mi": "6.5",
+      "hi": "8"
+    },
+    {
+      "n": "Vitesse agitation",
+      "u": "tr/min",
+      "lo": "200",
+      "mi": "350",
+      "hi": "500"
+    },
+    {
+      "n": "Conc. polymère",
+      "u": "%",
+      "lo": "2",
+      "mi": "4",
+      "hi": "6"
+    }
+  ],
+  "rname": "Viscosité",
+  "runit": "mPa·s",
+  "sets": [
+    {
+      "label": "Jeu A — modèle quadratique attendu",
+      "hint": "Interactions pH × polymère et T × agitation marquées",
+      "reps": 1,
+      "responses": [
+        213.8,
+        210.0,
+        153.3,
+        161.5,
+        184.7,
+        240.0,
+        144.2,
+        211.4,
+        143.7,
+        158.9,
+        134.1,
+        158.4,
+        129.6,
+        197.9,
+        137.1,
+        220.3
+      ]
+    },
+    {
+      "label": "Jeu B — modèle linéaire attendu",
+      "hint": "Concentration polymère domine, interactions faibles",
+      "reps": 1,
+      "responses": [
+        169.3,
+        208.7,
+        147.3,
+        188.0,
+        176.6,
+        221.8,
+        157.1,
+        203.5,
+        139.8,
+        183.8,
+        124.0,
+        166.3,
+        152.1,
+        195.9,
+        135.8,
+        180.8
+      ]
+    },
+    {
+      "label": "Jeu C — modèle quadratique attendu",
+      "hint": "T × pH et agitation × polymère interagissent fortement",
+      "reps": 1,
+      "responses": [
+        197.1,
+        199.4,
+        168.6,
+        178.9,
+        158.1,
+        207.3,
+        137.6,
+        194.8,
+        139.0,
+        156.3,
+        118.5,
+        143.7,
+        155.0,
+        213.2,
+        142.4,
+        208.7
+      ]
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "title": "Synthèse d'un ester",
+  "context": "2 facteurs · Taux de conversion",
+  "factors": [
+    {
+      "n": "Température",
+      "u": "°C",
+      "lo": "50",
+      "mi": "60",
+      "hi": "70"
+    },
+    {
+      "n": "Temps de réaction",
+      "u": "min",
+      "lo": "30",
+      "mi": "45",
+      "hi": "60"
+    }
+  ],
+  "rname": "Taux de conversion",
+  "runit": "%",
+  "sets": [
+    {
+      "label": "Jeu A — modèle quadratique attendu",
+      "hint": "Forte interaction température × temps",
+      "reps": 1,
+      "responses": [
+        70.3,
+        61.7,
+        60.1,
+        87.5
+      ]
+    },
+    {
+      "label": "Jeu B — modèle linéaire attendu",
+      "hint": "Les deux facteurs ont des effets indépendants",
+      "reps": 1,
+      "responses": [
+        55.7,
+        66.4,
+        68.7,
+        81.0
+      ]
+    },
+    {
+      "label": "Jeu C — modèle quadratique attendu",
+      "hint": "Le temps amplifie l'effet de la température",
+      "reps": 1,
+      "responses": [
+        65.4,
+        54.8,
+        59.2,
+        80.6
+      ]
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "title": "Saponification — données réelles",
+  "context": "4 facteurs · Rendement (%)",
+  "real": true,
+  "factors": [
+    {
+      "n": "NaOH",
+      "u": "%poids",
+      "lo": "1",
+      "mi": "",
+      "hi": "5"
+    },
+    {
+      "n": "Temps addition",
+      "u": "min",
+      "lo": "10",
+      "mi": "",
+      "hi": "20"
+    },
+    {
+      "n": "Temps maintien",
+      "u": "min",
+      "lo": "15",
+      "mi": "",
+      "hi": "30"
+    },
+    {
+      "n": "Température maintien",
+      "u": "°C",
+      "lo": "20",
+      "mi": "",
+      "hi": "40"
+    }
+  ],
+  "rname": "Rendement",
+  "runit": "%",
+  "sets": [
+    {
+      "label": "Plan 2⁴ — données expérimentales (experiences.xlsx)",
+      "hint": "Résultats réels issus du plan factoriel complet, 16 essais",
+      "reps": 1,
+      "responses": [
+        51.7,
+        51.0,
+        58.7,
+        56.7,
+        47.0,
+        40.3,
+        56.3,
+        49.0,
+        60.0,
+        58.8,
+        61.3,
+        56.8,
+        57.8,
+        52.4,
+        59.9,
+        57.8
+      ]
+    }
+  ]
+}

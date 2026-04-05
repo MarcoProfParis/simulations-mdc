@@ -1,0 +1,76 @@
+{
+  "title": "Optimisation d'une réaction catalytique",
+  "context": "3 facteurs · Rendement",
+  "factors": [
+    {
+      "n": "Température",
+      "u": "°C",
+      "lo": "80",
+      "mi": "100",
+      "hi": "120"
+    },
+    {
+      "n": "Pression",
+      "u": "bar",
+      "lo": "1",
+      "mi": "3",
+      "hi": "5"
+    },
+    {
+      "n": "Conc. catalyseur",
+      "u": "%",
+      "lo": "0.5",
+      "mi": "1.25",
+      "hi": "2"
+    }
+  ],
+  "rname": "Rendement",
+  "runit": "%",
+  "sets": [
+    {
+      "label": "Jeu A — modèle cubique attendu",
+      "hint": "Interaction triple T × P × C significative",
+      "reps": 1,
+      "responses": [
+        53.3,
+        66.7,
+        69.1,
+        54.5,
+        68.9,
+        59.3,
+        60.7,
+        87.1
+      ]
+    },
+    {
+      "label": "Jeu B — modèle quadratique attendu",
+      "hint": "Interactions d'ordre 2 dominantes",
+      "reps": 1,
+      "responses": [
+        72.0,
+        58.0,
+        56.4,
+        57.3,
+        56.3,
+        62.1,
+        67.5,
+        90.5
+      ]
+    },
+    {
+      "label": "Jeu C — modèle linéaire attendu",
+      "hint": "Effets principaux indépendants",
+      "reps": 1,
+      "responses": [
+        51.1,
+        55.8,
+        58.0,
+        63.1,
+        61.6,
+        68.0,
+        69.7,
+        77.2
+      ]
+    }
+  ]
+}

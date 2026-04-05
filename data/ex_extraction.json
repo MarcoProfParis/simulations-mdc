@@ -1,0 +1,57 @@
+{
+  "title": "Extraction d'un principe actif",
+  "context": "2 facteurs · Rendement d'extraction",
+  "factors": [
+    {
+      "n": "Température",
+      "u": "°C",
+      "lo": "60",
+      "mi": "70",
+      "hi": "80"
+    },
+    {
+      "n": "Concentration NaCl",
+      "u": "g/L",
+      "lo": "20",
+      "mi": "30",
+      "hi": "40"
+    }
+  ],
+  "rname": "Rendement d'extraction",
+  "runit": "%",
+  "sets": [
+    {
+      "label": "Jeu A — modèle linéaire attendu",
+      "hint": "Effets principaux dominants, interaction négligeable",
+      "reps": 1,
+      "responses": [
+        63.5,
+        68.4,
+        74.8,
+        80.9
+      ]
+    },
+    {
+      "label": "Jeu B — modèle quadratique attendu",
+      "hint": "Interaction température × NaCl significative",
+      "reps": 1,
+      "responses": [
+        74.3,
+        63.8,
+        66.1,
+        83.6
+      ]
+    },
+    {
+      "label": "Jeu C — modèle linéaire attendu",
+      "hint": "Température domine, NaCl peu influent",
+      "reps": 1,
+      "responses": [
+        61.9,
+        62.2,
+        77.4,
+        78.5
+      ]
+    }
+  ]
+}
