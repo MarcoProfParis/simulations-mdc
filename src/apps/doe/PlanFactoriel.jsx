@@ -49,15 +49,29 @@ function computeDefaultModel(factors) {
   return terms;
 }
 
+// Convention : terme quadratique pur = id + "2" (ex: "X12" = X1²)
+// terme d'interaction = id + id (ex: "X1X2")
+function quadPureTerm(id) { return id + "2"; }
+function isQuadPure(t, factors) { return factors.some(f => t === quadPureTerm(f.id)); }
+function isInteraction(t, factors) {
+  return factors.filter(f => t.includes(f.id)).length >= 2 && !isQuadPure(t, factors);
+}
+
 function getAllPossibleTerms(factors) {
   const n = factors.length;
   const ids = factors.map(f => f.id);
+  // effets principaux
   const t = [...ids];
+  // termes quadratiques purs (X1², X2², ...)
+  ids.forEach(id => t.push(quadPureTerm(id)));
+  // interactions ordre 2
   for (let i = 0; i < n; i++)
     for (let j = i + 1; j < n; j++) t.push(ids[i] + ids[j]);
+  // interactions ordre 3
   for (let i = 0; i < n; i++)
     for (let j = i + 1; j < n; j++)
       for (let k = j + 1; k < n; k++) t.push(ids[i] + ids[j] + ids[k]);
+  // interactions ordre 4
   for (let i = 0; i < n; i++)
     for (let j = i + 1; j < n; j++)
       for (let k = j + 1; k < n; k++)
@@ -68,14 +82,27 @@ function getAllPossibleTerms(factors) {
 function computePresetModel(preset, factors, modelDefault) {
   const n = factors.length;
   const ids = factors.map(f => f.id);
-  if (preset === "linear") return [...ids];
-  if (preset === "quadratic") {
+  if (preset === "linear") {
+    // Ŷ = α₀ + Σ αᵢXᵢ
+    return [...ids];
+  }
+  if (preset === "synergie") {
+    // Ŷ = α₀ + Σ αᵢXᵢ + Σ αᵢⱼXᵢXⱼ
     const t = [...ids];
     for (let i = 0; i < n; i++)
       for (let j = i + 1; j < n; j++) t.push(ids[i] + ids[j]);
     return t;
   }
+  if (preset === "quadratic") {
+    // Ŷ = α₀ + Σ αᵢXᵢ + Σ αᵢᵢXᵢ² + Σ αᵢⱼXᵢXⱼ
+    const t = [...ids];
+    ids.forEach(id => t.push(quadPureTerm(id)));
+    for (let i = 0; i < n; i++)
+      for (let j = i + 1; j < n; j++) t.push(ids[i] + ids[j]);
+    return t;
+  }
   if (preset === "cubic") {
+    // Ŷ = α₀ + Σ αᵢXᵢ + Σ αᵢⱼXᵢXⱼ + Σ αᵢⱼₖXᵢXⱼXₖ
     const t = [...ids];
     for (let i = 0; i < n; i++)
       for (let j = i + 1; j < n; j++) t.push(ids[i] + ids[j]);
@@ -88,18 +115,36 @@ function computePresetModel(preset, factors, modelDefault) {
 }
 
 function termOrder(t, factors) {
+  if (isQuadPure(t, factors)) return 2;
   return factors.filter(f => t.includes(f.id)).length;
 }
 
 function formatTermDisplay(t, factors) {
+  // quadratic pure: "X12" -> "X1²"
+  for (let i = 0; i < factors.length; i++) {
+    if (t === quadPureTerm(factors[i].id)) return "X" + (i + 1) + "²";
+  }
   let s = t;
   factors.forEach((f, i) => { s = s.split(f.id).join("X" + (i + 1)); });
   return s;
 }
 
 function termSubScript(t, factors) {
+  for (let i = 0; i < factors.length; i++) {
+    if (t === quadPureTerm(factors[i].id)) return (i + 1) + (i + 1);
+  }
   let s = t;
   factors.forEach((f, i) => { s = s.replaceAll(f.id, (i + 1).toString()); });
+  return s;
+}
+
+function formatTermHTML(t, factors) {
+  for (let i = 0; i < factors.length; i++) {
+    if (t === quadPureTerm(factors[i].id))
+      return "X<sub>" + (i + 1) + "</sub><sup>2</sup>";
+  }
+  let s = t;
+  factors.forEach((f, i) => { s = s.split(f.id).join("X<sub>" + (i + 1) + "</sub>"); });
   return s;
 }
 
@@ -410,6 +455,7 @@ export default function PlanFactoriel() {
   };
   const applyPreset = (p) => {
     if (p === "cubic" && factors.length < 3) { setShowCubicPopup(true); return; }
+    if (p === "synergie" && factors.length < 2) { setShowCubicPopup(true); return; }
     setModelPreset(p);
     setModelActive(computePresetModel(p, factors, modelDefault));
   };
@@ -419,13 +465,24 @@ export default function PlanFactoriel() {
   const hasMissing = missingRows.length > 0;
   const isDefaultModel = JSON.stringify([...modelActive].sort()) === JSON.stringify([...modelDefault].sort());
   const allTerms = getAllPossibleTerms(factors);
+  // Groupement : effets principaux (ordre 1), quadratiques purs, interactions par ordre
   const byOrder = {};
   allTerms.forEach(t => {
-    const o = termOrder(t, factors);
-    if (!byOrder[o]) byOrder[o] = [];
-    byOrder[o].push(t);
+    let key;
+    if (termOrder(t, factors) === 1) key = "1";
+    else if (isQuadPure(t, factors)) key = "quad";
+    else key = String(termOrder(t, factors));
+    if (!byOrder[key]) byOrder[key] = [];
+    byOrder[key].push(t);
   });
-  const orderLabels = { 1: "Effets principaux", 2: "Interactions ordre 2", 3: "Interactions ordre 3", 4: "Interactions ordre 4" };
+  const orderLabels = {
+    "1": "Effets principaux",
+    "quad": "Termes quadratiques purs (X²)",
+    "2": "Interactions ordre 2",
+    "3": "Interactions ordre 3",
+    "4": "Interactions ordre 4"
+  };
+  const orderedKeys = ["1", "quad", "2", "3", "4"].filter(k => byOrder[k]);
 
   // ─────────────────────────────────────────────────────────────────────────────
   // RENDU
@@ -698,8 +755,10 @@ export default function PlanFactoriel() {
           {showCubicPopup && (
             <div style={{ background: "rgba(0,0,0,0.35)", borderRadius: "var(--border-radius-lg, 12px)", padding: "2rem", marginBottom: "1rem", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 120 }}>
               <div style={CSS.popupBox}>
-                <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 8 }}>Modèle cubique impossible</div>
-                <div style={{ fontSize: 13, color: "var(--color-text-secondary, #666)", marginBottom: 14 }}>Il faut au moins 3 facteurs pour inclure des interactions d'ordre 3.</div>
+                <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 8 }}>Modèle impossible</div>
+                <div style={{ fontSize: 13, color: "var(--color-text-secondary, #666)", marginBottom: 14 }}>
+                  Le modèle cubique (ordre 3) nécessite au moins 3 facteurs.
+                </div>
                 <button style={CSS.btnSmall} onClick={() => setShowCubicPopup(false)}>Fermer</button>
               </div>
             </div>
@@ -712,9 +771,9 @@ export default function PlanFactoriel() {
             </div>
 
             <div style={{ ...CSS.row, gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-              {["linear", "quadratic", "cubic", "default"].map(p => (
+              {["linear", "synergie", "quadratic", "cubic", "default"].map(p => (
                 <button key={p} style={CSS.presetBtn(modelPreset === p)} onClick={() => applyPreset(p)}>
-                  {{ linear: "Linéaire", quadratic: "Quadratique", cubic: "Cubique", default: "Défaut (JSON)" }[p]}
+                  {{ linear: "Linéaire (ordre 1)", synergie: "Synergie (ordre 1+2)", quadratic: "Quadratique (ordre 2)", cubic: "Cubique (ordre 3)", default: "Défaut (JSON)" }[p]}
                 </button>
               ))}
             </div>
@@ -726,11 +785,11 @@ export default function PlanFactoriel() {
               <span style={{ ...CSS.muted, marginLeft: 4 }}>constante — toujours incluse</span>
             </div>
 
-            {Object.entries(byOrder).map(([order, terms]) => (
+            {orderedKeys.map(order => (
               <div key={order} style={{ marginTop: 12 }}>
                 <div style={{ ...CSS.muted, marginBottom: 5 }}>{orderLabels[order] || "Ordre " + order}</div>
                 <div>
-                  {terms.map(t => {
+                  {byOrder[order].map(t => {
                     const isOn = modelActive.includes(t);
                     return (
                       <span key={t} style={isOn ? CSS.modelTermOn : CSS.modelTermOff} onClick={() => toggleTerm(t)} title={modelDefault.includes(t) ? "Présent dans le modèle par défaut" : ""}>
@@ -759,7 +818,7 @@ export default function PlanFactoriel() {
             <div style={CSS.sectionLabel}>Équation</div>
             <div style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 13, color: "var(--color-text-primary, #111)", lineHeight: 2.2 }}>
               Ŷ = α₀{modelActive.map(t => (
-                <span key={t}> + α<sub>{termSubScript(t, factors)}</sub>·<span dangerouslySetInnerHTML={{ __html: (() => { let s = t; factors.forEach((f, i) => { s = s.split(f.id).join("X<sub>" + (i + 1) + "</sub>"); }); return s; })() }} /></span>
+                <span key={t}> + α<sub>{termSubScript(t, factors)}</sub>·<span dangerouslySetInnerHTML={{ __html: formatTermHTML(t, factors) }} /></span>
               ))}
             </div>
           </div>
