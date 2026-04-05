@@ -245,9 +245,12 @@ function Step1({ factors, setFactors, useCenter, setUseCenter, nrep, setNrep, rn
   const ne = 1 << factors.length;
   const total = ne + (useCenter ? nrep : 0);
 
-  function detectReps(ex) {
-    const n = ex.factors.length;
-    return Math.round(ex.experiments.length / (1 << n));
+  function detectReps(set) {
+    // Nouvelle structure : set.experiments[] contient les lignes du jeu
+    const exps = set.experiments || [];
+    if (exps.length === 0) return 1;
+    const n = factors.length;
+    return Math.round(exps.length / (1 << n));
   }
 
   async function loadExample(i) {
@@ -258,14 +261,15 @@ function Step1({ factors, setFactors, useCenter, setUseCenter, nrep, setNrep, rn
       const ex = await res.json();
       setLoadedEx(ex);
       setFactors(ex.factors.map((f) => ({ ...f })));
-      const resp0 = ex.responses[ex.sets[0].response_index ?? 0];
+      // Nouvelle structure : response est dans chaque set
+      const resp0 = ex.sets[0].response;
       setRname(resp0.name); setRunit(resp0.unit);
       setUseCenter(false);
-      // Stocker dans window pour Step2 (premier jeu par défaut)
-      window.__exExperiments = ex.experiments;
-      window.__exReps = detectReps(ex);
-      window.__exResponseIndex = ex.sets[0].response_index ?? 0;
-      window.__exLoadedData = ex; // données complètes pour la sélection multi-jeux
+      // Passer les expériences du premier set pour Step2
+      const set0 = ex.sets[0];
+      window.__exExperiments = set0.experiments;
+      window.__exReps = detectReps(set0);
+      window.__exLoadedData = ex;
       onExampleLoaded(ex);
     } catch (e) {
       setLoadError(`Impossible de charger le fichier : ${e.message}`);
@@ -396,29 +400,33 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
   const [reps, setReps] = useState(1);
   // Jeux sélectionnés : Set d'indices de sets
   const [selectedSets, setSelectedSets] = useState(() => new Set([0]));
-
-  // Quand loadedEx change (nouveau fichier) : reset selectedSets au jeu 0
   const prevLoadedExRef = useRef(null);
 
+  // Construit les experiments du jeu si (depuis la nouvelle structure set.experiments)
+  function getSetExps(si) {
+    if (!loadedEx) return experiments || [];
+    const set = loadedEx.sets[si];
+    return (set?.experiments || []).map(r => ({ ...r, Y: r.Y, _set: si }));
+  }
+
   useEffect(() => {
-    const exExp  = window.__exExperiments  || null;
-    const exReps = window.__exReps         || 1;
-    const exRI   = window.__exResponseIndex ?? 0;
+    const exExp = window.__exExperiments || null;
+    const exReps = window.__exReps || 1;
 
     if (exExp) {
-      // Nouveau chargement depuis un exemple
+      // Nouveau chargement : expériences du jeu 0 (déjà normalisées avec Y)
       const detectedReps = Math.round(exExp.length / (1 << factors.length));
       setReps(detectedReps);
       setExperiments(exExp);
-      setSelectedSets(new Set([0])); // reset: jeu 0 par défaut
-      // Les réponses seront construites depuis buildMergedExperiments
+      setSelectedSets(new Set([0]));
       const sorted = [...exExp].sort((a, b) => a.exp_no - b.exp_no);
-      const yKey = `Y${exRI + 1}`;
-      setResponses(sorted.map((e) => String(e[yKey])));
+      setResponses(sorted.map(e => String(e.Y)));
       setCenterResponses(Array(nrep).fill(""));
-      window.__exExperiments = null; window.__exReps = null; window.__exResponseIndex = null;
+      window.__exExperiments = null; window.__exReps = null;
     } else if (experiments) {
-      const detectedReps = Math.round(experiments.length / (1 << factors.length));
+      // Retour arrière : recalculer reps depuis loadedEx si disponible
+      const refExps = loadedEx ? (loadedEx.sets[0]?.experiments || experiments) : experiments;
+      const detectedReps = Math.round(refExps.length / (1 << factors.length));
       setReps(detectedReps);
     } else if (responses.length === 0) {
       setReps(1);
@@ -429,27 +437,21 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
 
   // Construit la matrice fusionnée à partir des jeux sélectionnés
   function buildMergedExperiments() {
-    if (!loadedEx || !experiments) return experiments;
+    if (!loadedEx) return experiments;
     const setsArr = loadedEx.sets;
-    if (setsArr.length <= 1 || selectedSets.size <= 1) return experiments;
-    // Pour chaque jeu sélectionné, on copie les expériences en remplaçant Y par le bon index
-    const sorted = [...experiments].sort((a, b) => a.exp_no - b.exp_no);
-    const xKeys = Object.keys(sorted[0]).filter(k => /^X\d+$/.test(k)).sort();
+    if (selectedSets.size <= 1) {
+      // Jeu unique : retourner les expériences du jeu sélectionné, normalisées
+      const si = Array.from(selectedSets)[0];
+      return getSetExps(si);
+    }
+    // Multi-jeux : concaténer les expériences de chaque jeu sélectionné
     const merged = [];
     let globalNo = 1;
     Array.from(selectedSets).sort().forEach((si) => {
-      const set = setsArr[si];
-      const ri = set.response_index ?? 0;
-      const yKey = `Y${ri + 1}`;
-      sorted.forEach((row) => {
-        merged.push({
-          exp_no: globalNo++,
-          run_order: row.run_order,
-          _set: si,        // tag pour colorer les lignes par jeu
-          _setLabel: setsArr.length > 1 ? `Jeu ${"ABC"[si]}` : "Jeu unique",
-          ...Object.fromEntries(xKeys.map(k => [k, row[k]])),
-          Y1: row[yKey],
-        });
+      const setExps = getSetExps(si);
+      const sorted = [...setExps].sort((a, b) => a.exp_no - b.exp_no);
+      sorted.forEach(row => {
+        merged.push({ ...row, exp_no: globalNo++, _set: si });
       });
     });
     return merged;
@@ -460,23 +462,20 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
     setSelectedSets(prev => {
       const next = new Set(prev);
       if (next.has(si)) {
-        if (next.size === 1) return prev; // garder au moins 1
+        if (next.size === 1) return prev;
         next.delete(si);
       } else {
         next.add(si);
       }
-      // Reconstruire les réponses pour la sélection courante
-      if (loadedEx && experiments) {
-        const setsArr = loadedEx.sets;
-        const sorted = [...experiments].sort((a, b) => a.exp_no - b.exp_no);
+      // Reconstruire les réponses pour la nouvelle sélection
+      if (loadedEx) {
         const merged = [];
-        Array.from(next).sort().forEach((idx) => {
-          const set = setsArr[idx];
-          const ri = set.response_index ?? 0;
-          const yKey = `Y${ri + 1}`;
-          sorted.forEach(row => merged.push({ ...row, Y1: row[yKey] }));
+        Array.from(next).sort().forEach(idx => {
+          const setExps = (loadedEx.sets[idx]?.experiments || [])
+            .sort((a, b) => a.exp_no - b.exp_no);
+          setExps.forEach(row => merged.push(row));
         });
-        setResponses(merged.map(r => String(r.Y1)));
+        setResponses(merged.map(r => String(r.Y)));
       }
       return next;
     });
@@ -515,11 +514,11 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
   }
 
   // ── Mode matrice complète (experiments) ──────────────────────────────────────
-  if (experiments) {
-    const merged = buildMergedExperiments();
+  if (experiments || loadedEx) {
+    const merged = buildMergedExperiments() || [];
     const sorted = [...merged].sort((a, b) => a.exp_no - b.exp_no);
-    const xKeys = Object.keys(experiments[0]).filter(k => /^X\d+$/.test(k)).sort();
-    const yKey = 'Y1';
+    const xKeys = sorted.length > 0 ? Object.keys(sorted[0]).filter(k => /^X\d+$/.test(k)).sort() : [];
+    const yKey = 'Y';
     const combKey = (row) => xKeys.map(k => row[k]).join(',');
     const combGroups = {};
     sorted.forEach(row => {

@@ -1,89 +1,99 @@
 {
   "title": "Extraction d'un principe actif",
-  "context": "2 facteurs · Rendement d'extraction",
+  "context": "2 facteurs · Rendement d'extraction (%)",
+  "real": false,
   "factors": [
     {
       "n": "Température",
       "u": "°C",
-      "lo": "60",
-      "mi": "70",
-      "hi": "80"
+      "lo": "40",
+      "mi": "50",
+      "hi": "60"
     },
     {
       "n": "Concentration NaCl",
-      "u": "g/L",
-      "lo": "20",
-      "mi": "30",
-      "hi": "40"
-    }
-  ],
-  "responses": [
-    {
-      "name": "Rendement d'extraction (Jeu A)",
-      "unit": "%"
-    },
-    {
-      "name": "Rendement d'extraction (Jeu B)",
-      "unit": "%"
-    },
-    {
-      "name": "Rendement d'extraction (Jeu C)",
-      "unit": "%"
+      "u": "%",
+      "lo": "40",
+      "mi": "60",
+      "hi": "80"
     }
   ],
   "sets": [
     {
-      "label": "Jeu A — modèle linéaire attendu",
-      "hint": "Effets principaux dominants, interaction négligeable",
-      "response_index": 0
+      "label": "Jeu A — extraction standard (rép. 1)",
+      "hint": "Effet température dominant · α₁ ≈ 8",
+      "response": {
+        "name": "Rendement extraction",
+        "unit": "%"
+      },
+      "experiments": [
+        {
+          "exp_no": 1,
+          "run_order": 4,
+          "X1": -1,
+          "X2": -1,
+          "Y": 71.944
+        },
+        {
+          "exp_no": 2,
+          "run_order": 1,
+          "X1": -1,
+          "X2": 1,
+          "Y": 57.754
+        },
+        {
+          "exp_no": 3,
+          "run_order": 3,
+          "X1": 1,
+          "X2": -1,
+          "Y": 79.931
+        },
+        {
+          "exp_no": 4,
+          "run_order": 2,
+          "X1": 1,
+          "X2": 1,
+          "Y": 78.68
+        }
+      ]
     },
     {
-      "label": "Jeu B — modèle quadratique attendu",
-      "hint": "Interaction température × NaCl significative",
-      "response_index": 1
-    },
-    {
-      "label": "Jeu C — modèle linéaire attendu",
-      "hint": "Température domine, NaCl peu influent",
-      "response_index": 2
-    }
-  ],
-  "experiments": [
-    {
-      "exp_no": 1,
-      "run_order": 1,
-      "X1": -1,
-      "X2": -1,
-      "Y1": 63.512,
-      "Y2": 74.259,
-      "Y3": 61.929
-    },
-    {
-      "exp_no": 2,
-      "run_order": 2,
-      "X1": -1,
-      "X2": 1,
-      "Y1": 68.441,
-      "Y2": 63.788,
-      "Y3": 62.176
-    },
-    {
-      "exp_no": 3,
-      "run_order": 3,
-      "X1": 1,
-      "X2": -1,
-      "Y1": 74.771,
-      "Y2": 66.118,
-      "Y3": 77.424
-    },
-    {
-      "exp_no": 4,
-      "run_order": 4,
-      "X1": 1,
-      "X2": 1,
-      "Y1": 80.9,
-      "Y2": 83.647,
-      "Y3": 78.471
+      "label": "Jeu B — extraction purifiée (rép. 1)",
+      "hint": "Effet température légèrement plus fort · α₁ ≈ 9",
+      "response": {
+        "name": "Rendement extraction purifié",
+        "unit": "%"
+      },
+      "experiments": [
+        {
+          "exp_no": 1,
+          "run_order": 2,
+          "X1": -1,
+          "X2": -1,
+          "Y": 64.413
+        },
+        {
+          "exp_no": 2,
+          "run_order": 3,
+          "X1": -1,
+          "X2": 1,
+          "Y": 53.7
+        },
+        {
+          "exp_no": 3,
+          "run_order": 4,
+          "X1": 1,
+          "X2": -1,
+          "Y": 80.065
+        },
+        {
+          "exp_no": 4,
+          "run_order": 1,
+          "X1": 1,
+          "X2": 1,
+          "Y": 72.258
+        }
+      ]
     }
   ]
 }

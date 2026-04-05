@@ -1,89 +1,99 @@
 {
   "title": "Synthèse d'un ester",
-  "context": "2 facteurs · Taux de conversion",
+  "context": "2 facteurs · Taux de conversion (%)",
+  "real": false,
   "factors": [
     {
       "n": "Température",
       "u": "°C",
-      "lo": "50",
-      "mi": "60",
-      "hi": "70"
+      "lo": "60",
+      "mi": "70",
+      "hi": "80"
     },
     {
-      "n": "Temps de réaction",
-      "u": "min",
-      "lo": "30",
-      "mi": "45",
-      "hi": "60"
-    }
-  ],
-  "responses": [
-    {
-      "name": "Taux de conversion (Jeu A)",
-      "unit": "%"
-    },
-    {
-      "name": "Taux de conversion (Jeu B)",
-      "unit": "%"
-    },
-    {
-      "name": "Taux de conversion (Jeu C)",
-      "unit": "%"
+      "n": "Rapport molaire",
+      "u": "",
+      "lo": "1",
+      "mi": "1.5",
+      "hi": "2"
     }
   ],
   "sets": [
     {
-      "label": "Jeu A — modèle quadratique attendu",
-      "hint": "Forte interaction température × temps",
-      "response_index": 0
+      "label": "Jeu A — catalyseur acide",
+      "hint": "Température dominante · α₁ ≈ 12",
+      "response": {
+        "name": "Taux de conversion",
+        "unit": "%"
+      },
+      "experiments": [
+        {
+          "exp_no": 1,
+          "run_order": 4,
+          "X1": -1,
+          "X2": -1,
+          "Y": 40.603
+        },
+        {
+          "exp_no": 2,
+          "run_order": 1,
+          "X1": -1,
+          "X2": 1,
+          "Y": 65.489
+        },
+        {
+          "exp_no": 3,
+          "run_order": 3,
+          "X1": 1,
+          "X2": -1,
+          "Y": 73.611
+        },
+        {
+          "exp_no": 4,
+          "run_order": 2,
+          "X1": 1,
+          "X2": 1,
+          "Y": 79.608
+        }
+      ]
     },
     {
-      "label": "Jeu B — modèle linéaire attendu",
-      "hint": "Les deux facteurs ont des effets indépendants",
-      "response_index": 1
-    },
-    {
-      "label": "Jeu C — modèle quadratique attendu",
-      "hint": "Le temps amplifie l'effet de la température",
-      "response_index": 2
-    }
-  ],
-  "experiments": [
-    {
-      "exp_no": 1,
-      "run_order": 1,
-      "X1": -1,
-      "X2": -1,
-      "Y1": 70.265,
-      "Y2": 55.659,
-      "Y3": 65.382
-    },
-    {
-      "exp_no": 2,
-      "run_order": 2,
-      "X1": -1,
-      "X2": 1,
-      "Y1": 61.676,
-      "Y2": 66.388,
-      "Y3": 54.794
-    },
-    {
-      "exp_no": 3,
-      "run_order": 3,
-      "X1": 1,
-      "X2": -1,
-      "Y1": 60.088,
-      "Y2": 68.718,
-      "Y3": 59.206
-    },
-    {
-      "exp_no": 4,
-      "run_order": 4,
-      "X1": 1,
-      "X2": 1,
-      "Y1": 87.5,
-      "Y2": 81.047,
-      "Y3": 80.618
+      "label": "Jeu B — catalyseur basique",
+      "hint": "Température plus marquée · α₁ ≈ 14",
+      "response": {
+        "name": "Taux de conversion",
+        "unit": "%"
+      },
+      "experiments": [
+        {
+          "exp_no": 1,
+          "run_order": 3,
+          "X1": -1,
+          "X2": -1,
+          "Y": 38.692
+        },
+        {
+          "exp_no": 2,
+          "run_order": 1,
+          "X1": -1,
+          "X2": 1,
+          "Y": 55.315
+        },
+        {
+          "exp_no": 3,
+          "run_order": 4,
+          "X1": 1,
+          "X2": -1,
+          "Y": 73.253
+        },
+        {
+          "exp_no": 4,
+          "run_order": 2,
+          "X1": 1,
+          "X2": 1,
+          "Y": 79.161
+        }
+      ]
     }
   ]
 }
