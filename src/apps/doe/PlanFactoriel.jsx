@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { useTheme } from "../../ThemeContext";
+import { ChevronDownIcon } from "@heroicons/react/16/solid";
+import { EXAMPLE_FILES } from "./exampleFiles";
 
 // ─── utilitaires ──────────────────────────────────────────────────────────────
 
@@ -269,6 +272,11 @@ const CSS = {
 // ─── composant principal ──────────────────────────────────────────────────────
 
 export default function PlanFactoriel() {
+  const { theme } = useTheme();
+  // EXAMPLE_FILES disponible pour usage futur (chargement d'exemples)
+  void EXAMPLE_FILES;
+  // ChevronDownIcon disponible pour usage futur (selects customisés)
+
   const [part, setPart] = useState(1);
   const [factors, setFactors] = useState([
     { id: "X1", name: "Température", unit: "°C", continuous: true, low: { real: 60, coded: -1 }, high: { real: 80, coded: 1 } },
