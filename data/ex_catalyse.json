@@ -1,6 +1,7 @@
 {
   "title": "Optimisation d'une réaction catalytique",
-  "context": "3 facteurs · Rendement",
+  "context": "3 facteurs · Rendement (%)",
+  "real": false,
   "factors": [
     {
       "n": "Température",
@@ -13,128 +14,165 @@
       "n": "Pression",
       "u": "bar",
       "lo": "1",
-      "mi": "3",
-      "hi": "5"
+      "mi": "2",
+      "hi": "3"
     },
     {
-      "n": "Conc. catalyseur",
-      "u": "%",
-      "lo": "0.5",
-      "mi": "1.25",
-      "hi": "2"
-    }
-  ],
-  "responses": [
-    {
-      "name": "Rendement (Jeu A)",
-      "unit": "%"
-    },
-    {
-      "name": "Rendement (Jeu B)",
-      "unit": "%"
-    },
-    {
-      "name": "Rendement (Jeu C)",
-      "unit": "%"
+      "n": "Temps",
+      "u": "h",
+      "lo": "1",
+      "mi": "2",
+      "hi": "3"
     }
   ],
   "sets": [
     {
-      "label": "Jeu A — modèle cubique attendu",
-      "hint": "Interaction triple T × P × C significative",
-      "response_index": 0
+      "label": "Jeu A — catalyseur Pd/C",
+      "hint": "Interactions T×P significatives · α₁₂ ≈ 3",
+      "response": {
+        "name": "Rendement",
+        "unit": "%"
+      },
+      "experiments": [
+        {
+          "exp_no": 1,
+          "run_order": 7,
+          "X1": -1,
+          "X2": -1,
+          "X3": -1,
+          "Y": 64.45
+        },
+        {
+          "exp_no": 2,
+          "run_order": 4,
+          "X1": -1,
+          "X2": -1,
+          "X3": 1,
+          "Y": 59.537
+        },
+        {
+          "exp_no": 3,
+          "run_order": 2,
+          "X1": -1,
+          "X2": 1,
+          "X3": -1,
+          "Y": 74.705
+        },
+        {
+          "exp_no": 4,
+          "run_order": 1,
+          "X1": -1,
+          "X2": 1,
+          "X3": 1,
+          "Y": 70.469
+        },
+        {
+          "exp_no": 5,
+          "run_order": 8,
+          "X1": 1,
+          "X2": -1,
+          "X3": -1,
+          "Y": 85.054
+        },
+        {
+          "exp_no": 6,
+          "run_order": 3,
+          "X1": 1,
+          "X2": -1,
+          "X3": 1,
+          "Y": 75.505
+        },
+        {
+          "exp_no": 7,
+          "run_order": 6,
+          "X1": 1,
+          "X2": 1,
+          "X3": -1,
+          "Y": 102.709
+        },
+        {
+          "exp_no": 8,
+          "run_order": 5,
+          "X1": 1,
+          "X2": 1,
+          "X3": 1,
+          "Y": 90.854
+        }
+      ]
     },
     {
-      "label": "Jeu B — modèle quadratique attendu",
-      "hint": "Interactions d'ordre 2 dominantes",
-      "response_index": 1
-    },
-    {
-      "label": "Jeu C — modèle linéaire attendu",
-      "hint": "Effets principaux indépendants",
-      "response_index": 2
-    }
-  ],
-  "experiments": [
-    {
-      "exp_no": 1,
-      "run_order": 1,
-      "X1": -1,
-      "X2": -1,
-      "X3": -1,
-      "Y1": 53.265,
-      "Y2": 72.024,
-      "Y3": 51.106
-    },
-    {
-      "exp_no": 2,
-      "run_order": 2,
-      "X1": -1,
-      "X2": -1,
-      "X3": 1,
-      "Y1": 66.676,
-      "Y2": 58.035,
-      "Y3": 55.835
-    },
-    {
-      "exp_no": 3,
-      "run_order": 3,
-      "X1": -1,
-      "X2": 1,
-      "X3": -1,
-      "Y1": 69.088,
-      "Y2": 56.447,
-      "Y3": 57.965
-    },
-    {
-      "exp_no": 4,
-      "run_order": 4,
-      "X1": -1,
-      "X2": 1,
-      "X3": 1,
-      "Y1": 54.5,
-      "Y2": 57.259,
-      "Y3": 63.094
-    },
-    {
-      "exp_no": 5,
-      "run_order": 5,
-      "X1": 1,
-      "X2": -1,
-      "X3": -1,
-      "Y1": 68.912,
-      "Y2": 56.271,
-      "Y3": 61.624
-    },
-    {
-      "exp_no": 6,
-      "run_order": 6,
-      "X1": 1,
-      "X2": -1,
-      "X3": 1,
-      "Y1": 59.324,
-      "Y2": 62.082,
-      "Y3": 67.953
-    },
-    {
-      "exp_no": 7,
-      "run_order": 7,
-      "X1": 1,
-      "X2": 1,
-      "X3": -1,
-      "Y1": 60.735,
-      "Y2": 67.494,
-      "Y3": 69.682
-    },
-    {
-      "exp_no": 8,
-      "run_order": 8,
-      "X1": 1,
-      "X2": 1,
-      "X3": 1,
-      "Y1": 87.147,
-      "Y2": 90.506,
-      "Y3": 77.212
+      "label": "Jeu B — catalyseur Pt/Al₂O₃",
+      "hint": "Interaction T×P plus forte · α₁₂ ≈ 4",
+      "response": {
+        "name": "Rendement",
+        "unit": "%"
+      },
+      "experiments": [
+        {
+          "exp_no": 1,
+          "run_order": 6,
+          "X1": -1,
+          "X2": -1,
+          "X3": -1,
+          "Y": 65.683
+        },
+        {
+          "exp_no": 2,
+          "run_order": 8,
+          "X1": -1,
+          "X2": -1,
+          "X3": 1,
+          "Y": 58.799
+        },
+        {
+          "exp_no": 3,
+          "run_order": 7,
+          "X1": -1,
+          "X2": 1,
+          "X3": -1,
+          "Y": 71.322
+        },
+        {
+          "exp_no": 4,
+          "run_order": 5,
+          "X1": -1,
+          "X2": 1,
+          "X3": 1,
+          "Y": 62.881
+        },
+        {
+          "exp_no": 5,
+          "run_order": 1,
+          "X1": 1,
+          "X2": -1,
+          "X3": -1,
+          "Y": 75.174
+        },
+        {
+          "exp_no": 6,
+          "run_order": 3,
+          "X1": 1,
+          "X2": -1,
+          "X3": 1,
+          "Y": 73.593
+        },
+        {
+          "exp_no": 7,
+          "run_order": 4,
+          "X1": 1,
+          "X2": 1,
+          "X3": -1,
+          "Y": 104.559
+        },
+        {
+          "exp_no": 8,
+          "run_order": 2,
+          "X1": 1,
+          "X2": 1,
+          "X3": 1,
+          "Y": 89.344
+        }
+      ]
     }
   ]
 }
