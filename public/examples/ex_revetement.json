@@ -1,191 +1,176 @@
 {
-  "title": "Formulation d'un revêtement",
-  "context": "4 facteurs · Viscosité & Dureté",
-  "real": false,
+  "meta": {
+    "id": "ex_revetement",
+    "title": "Formulation d'un revêtement",
+    "context": "4 facteurs · Viscosité",
+    "tags": ["modèle synergie", "4 facteurs", "plan factoriel complet 2⁴"],
+    "difficulty": "intermédiaire",
+    "real_data": false,
+    "source": ""
+  },
+
   "factors": [
     {
-      "n": "Résine A",
-      "u": "%",
-      "lo": "30",
-      "mi": "40",
-      "hi": "50"
+      "id": "X1",
+      "name": "Résine A",
+      "unit": "%",
+      "continuous": true,
+      "low":  { "real": 30, "coded": -1 },
+      "high": { "real": 50, "coded":  1 }
     },
     {
-      "n": "Résine B",
-      "u": "%",
-      "lo": "10",
-      "mi": "15",
-      "hi": "20"
+      "id": "X2",
+      "name": "Résine B",
+      "unit": "%",
+      "continuous": true,
+      "low":  { "real": 10, "coded": -1 },
+      "high": { "real": 20, "coded":  1 }
     },
     {
-      "n": "Solvant",
-      "u": "%",
-      "lo": "20",
-      "mi": "25",
-      "hi": "30"
+      "id": "X3",
+      "name": "Solvant",
+      "unit": "%",
+      "continuous": true,
+      "low":  { "real": 20, "coded": -1 },
+      "high": { "real": 30, "coded":  1 }
     },
     {
-      "n": "Température",
-      "u": "°C",
-      "lo": "20",
-      "mi": "30",
-      "hi": "40"
+      "id": "X4",
+      "name": "Température",
+      "unit": "°C",
+      "continuous": true,
+      "low":  { "real": 20, "coded": -1 },
+      "high": { "real": 40, "coded":  1 }
     }
   ],
-  "sets": [
+
+  "responses": [
     {
-      "label": "Jeu A — viscosité (mPa·s)",
-      "hint": "Résine A dominante · α₁ ≈ 60",
-      "response": {
-        "name": "Viscosité",
-        "unit": "mPa·s"
-      },
-      "experiments": [
-        {
-          "exp_no": 1,
-          "run_order": 4,
-          "X1": -1,
-          "X2": -1,
-          "X3": -1,
-          "X4": -1,
-          "Y": 397.216
-        },
-        {
-          "exp_no": 2,
-          "run_order": 15,
-          "X1": -1,
-          "X2": -1,
-          "X3": -1,
-          "X4": 1,
-          "Y": 431.233
-        },
-        {
-          "exp_no": 3,
-          "run_order": 8,
-          "X1": -1,
-          "X2": -1,
-          "X3": 1,
-          "X4": -1,
-          "Y": 477.08
-        },
-        {
-          "exp_no": 4,
-          "run_order": 10,
-          "X1": -1,
-          "X2": -1,
-          "X3": 1,
-          "X4": 1,
-          "Y": 504.538
-        },
-        {
-          "exp_no": 5,
-          "run_order": 14,
-          "X1": -1,
-          "X2": 1,
-          "X3": -1,
-          "X4": -1,
-          "Y": 281.91
-        },
-        {
-          "exp_no": 6,
-          "run_order": 12,
-          "X1": -1,
-          "X2": 1,
-          "X3": -1,
-          "X4": 1,
-          "Y": 306.357
-        },
-        {
-          "exp_no": 7,
-          "run_order": 5,
-          "X1": -1,
-          "X2": 1,
-          "X3": 1,
-          "X4": -1,
-          "Y": 351.881
-        },
-        {
-          "exp_no": 8,
-          "run_order": 6,
-          "X1": -1,
-          "X2": 1,
-          "X3": 1,
-          "X4": 1,
-          "Y": 391.083
-        },
-        {
-          "exp_no": 9,
-          "run_order": 13,
-          "X1": 1,
-          "X2": -1,
-          "X3": -1,
-          "X4": -1,
-          "Y": 509.934
-        },
-        {
-          "exp_no": 10,
-          "run_order": 9,
-          "X1": 1,
-          "X2": -1,
-          "X3": -1,
-          "X4": 1,
-          "Y": 526.613
-        },
-        {
-          "exp_no": 11,
-          "run_order": 2,
-          "X1": 1,
-          "X2": -1,
-          "X3": 1,
-          "X4": -1,
-          "Y": 512.57
-        },
-        {
-          "exp_no": 12,
-          "run_order": 1,
-          "X1": 1,
-          "X2": -1,
-          "X3": 1,
-          "X4": 1,
-          "Y": 573.228
-        },
-        {
-          "exp_no": 13,
-          "run_order": 16,
-          "X1": 1,
-          "X2": 1,
-          "X3": -1,
-          "X4": -1,
-          "Y": 475.147
-        },
-        {
-          "exp_no": 14,
-          "run_order": 7,
-          "X1": 1,
-          "X2": 1,
-          "X3": -1,
-          "X4": 1,
-          "Y": 494.564
-        },
-        {
-          "exp_no": 15,
-          "run_order": 3,
-          "X1": 1,
-          "X2": 1,
-          "X3": 1,
-          "X4": -1,
-          "Y": 488.9
-        },
-        {
-          "exp_no": 16,
-          "run_order": 11,
-          "X1": 1,
-          "X2": 1,
-          "X3": 1,
-          "X4": 1,
-          "Y": 524.328
-        }
-      ]
+      "id": "Y1",
+      "name": "Viscosité",
+      "unit": "mPa·s"
+    }
+  ],
+
+  "center_point": {
+    "present": false,
+    "replicates": 1
+  },
+
+  "model_default": ["X1", "X2", "X3", "X4", "X1X2", "X1X3", "X1X4"],
+
+  "runs": [
+    {
+      "id": 1,
+      "coded":  { "X1": -1, "X2": -1, "X3": -1, "X4": -1 },
+      "real":   { "X1": 30, "X2": 10, "X3": 20, "X4": 20 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 397.216 }]
+    },
+    {
+      "id": 2,
+      "coded":  { "X1": -1, "X2": -1, "X3": -1, "X4":  1 },
+      "real":   { "X1": 30, "X2": 10, "X3": 20, "X4": 40 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 431.233 }]
+    },
+    {
+      "id": 3,
+      "coded":  { "X1": -1, "X2": -1, "X3":  1, "X4": -1 },
+      "real":   { "X1": 30, "X2": 10, "X3": 30, "X4": 20 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 477.08 }]
+    },
+    {
+      "id": 4,
+      "coded":  { "X1": -1, "X2": -1, "X3":  1, "X4":  1 },
+      "real":   { "X1": 30, "X2": 10, "X3": 30, "X4": 40 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 504.538 }]
+    },
+    {
+      "id": 5,
+      "coded":  { "X1": -1, "X2":  1, "X3": -1, "X4": -1 },
+      "real":   { "X1": 30, "X2": 20, "X3": 20, "X4": 20 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 281.91 }]
+    },
+    {
+      "id": 6,
+      "coded":  { "X1": -1, "X2":  1, "X3": -1, "X4":  1 },
+      "real":   { "X1": 30, "X2": 20, "X3": 20, "X4": 40 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 306.357 }]
+    },
+    {
+      "id": 7,
+      "coded":  { "X1": -1, "X2":  1, "X3":  1, "X4": -1 },
+      "real":   { "X1": 30, "X2": 20, "X3": 30, "X4": 20 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 351.881 }]
+    },
+    {
+      "id": 8,
+      "coded":  { "X1": -1, "X2":  1, "X3":  1, "X4":  1 },
+      "real":   { "X1": 30, "X2": 20, "X3": 30, "X4": 40 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 391.083 }]
+    },
+    {
+      "id": 9,
+      "coded":  { "X1":  1, "X2": -1, "X3": -1, "X4": -1 },
+      "real":   { "X1": 50, "X2": 10, "X3": 20, "X4": 20 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 509.934 }]
+    },
+    {
+      "id": 10,
+      "coded":  { "X1":  1, "X2": -1, "X3": -1, "X4":  1 },
+      "real":   { "X1": 50, "X2": 10, "X3": 20, "X4": 40 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 526.613 }]
+    },
+    {
+      "id": 11,
+      "coded":  { "X1":  1, "X2": -1, "X3":  1, "X4": -1 },
+      "real":   { "X1": 50, "X2": 10, "X3": 30, "X4": 20 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 512.57 }]
+    },
+    {
+      "id": 12,
+      "coded":  { "X1":  1, "X2": -1, "X3":  1, "X4":  1 },
+      "real":   { "X1": 50, "X2": 10, "X3": 30, "X4": 40 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 573.228 }]
+    },
+    {
+      "id": 13,
+      "coded":  { "X1":  1, "X2":  1, "X3": -1, "X4": -1 },
+      "real":   { "X1": 50, "X2": 20, "X3": 20, "X4": 20 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 475.147 }]
+    },
+    {
+      "id": 14,
+      "coded":  { "X1":  1, "X2":  1, "X3": -1, "X4":  1 },
+      "real":   { "X1": 50, "X2": 20, "X3": 20, "X4": 40 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 494.564 }]
+    },
+    {
+      "id": 15,
+      "coded":  { "X1":  1, "X2":  1, "X3":  1, "X4": -1 },
+      "real":   { "X1": 50, "X2": 20, "X3": 30, "X4": 20 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 488.9 }]
+    },
+    {
+      "id": 16,
+      "coded":  { "X1":  1, "X2":  1, "X3":  1, "X4":  1 },
+      "real":   { "X1": 50, "X2": 20, "X3": 30, "X4": 40 },
+      "center": false,
+      "replicates": [{ "rep": 1, "Y1": 524.328 }]
     }
   ]
 }

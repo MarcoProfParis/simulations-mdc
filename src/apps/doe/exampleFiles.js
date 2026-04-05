@@ -36,4 +36,12 @@ export const EXAMPLE_FILES = [
     difficulty: "débutant",
     real_data: false,
   },
+  {
+    file: "ex_revetement.json",
+    url: `${base}examples/ex_revetement.json`,
+    title: "Formulation d'un revêtement",
+    context: "4 facteurs · Viscosité",
+    difficulty: "intermédiaire",
+    real_data: false,
+  },
 ];
