@@ -17,41 +17,73 @@
       "hi": "60"
     }
   ],
-  "rname": "Taux de conversion",
-  "runit": "%",
+  "responses": [
+    {
+      "name": "Taux de conversion (Jeu A)",
+      "unit": "%"
+    },
+    {
+      "name": "Taux de conversion (Jeu B)",
+      "unit": "%"
+    },
+    {
+      "name": "Taux de conversion (Jeu C)",
+      "unit": "%"
+    }
+  ],
   "sets": [
     {
       "label": "Jeu A — modèle quadratique attendu",
       "hint": "Forte interaction température × temps",
-      "reps": 1,
-      "responses": [
-        70.3,
-        61.7,
-        60.1,
-        87.5
-      ]
+      "response_index": 0
     },
     {
       "label": "Jeu B — modèle linéaire attendu",
       "hint": "Les deux facteurs ont des effets indépendants",
-      "reps": 1,
-      "responses": [
-        55.7,
-        66.4,
-        68.7,
-        81.0
-      ]
+      "response_index": 1
     },
     {
       "label": "Jeu C — modèle quadratique attendu",
       "hint": "Le temps amplifie l'effet de la température",
-      "reps": 1,
-      "responses": [
-        65.4,
-        54.8,
-        59.2,
-        80.6
-      ]
+      "response_index": 2
+    }
+  ],
+  "experiments": [
+    {
+      "exp_no": 1,
+      "run_order": 1,
+      "X1": -1,
+      "X2": -1,
+      "Y1": 70.265,
+      "Y2": 55.659,
+      "Y3": 65.382
+    },
+    {
+      "exp_no": 2,
+      "run_order": 2,
+      "X1": -1,
+      "X2": 1,
+      "Y1": 61.676,
+      "Y2": 66.388,
+      "Y3": 54.794
+    },
+    {
+      "exp_no": 3,
+      "run_order": 3,
+      "X1": 1,
+      "X2": -1,
+      "Y1": 60.088,
+      "Y2": 68.718,
+      "Y3": 59.206
+    },
+    {
+      "exp_no": 4,
+      "run_order": 4,
+      "X1": 1,
+      "X2": 1,
+      "Y1": 87.5,
+      "Y2": 81.047,
+      "Y3": 80.618
     }
   ]
 }
