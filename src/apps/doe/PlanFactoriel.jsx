@@ -1313,7 +1313,7 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
       </div>
       {/* Desktop : nav */}
       <div className="hidden sm:block">
-        <nav aria-label="Onglets résultats" className="flex space-x-1">
+        <nav aria-label="Onglets résultats" className="flex space-x-1 border-b border-gray-200 dark:border-white/10">
           {TABS.map((tab) => (
             <button
               key={tab.id}
@@ -1321,9 +1321,9 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
               aria-current={activeTab === tab.id ? "page" : undefined}
               className={classNames(
                 activeTab === tab.id
-                  ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300"
-                  : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
-                "flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors"
+                  ? "border-b-2 border-gray-800 text-gray-900 dark:border-white dark:text-white"
+                  : "border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
+                "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors -mb-px"
               )}
             >
               <span className="text-base leading-none">{tab.icon}</span>
@@ -1537,17 +1537,23 @@ export default function PlanFactoriel({ onBack }) {
   }
 
   return (
-    <div style={{ fontFamily: "system-ui, sans-serif", color: "var(--text)", maxWidth: 1040, margin: "0 auto", padding: "1rem 0" }}>
+    <div style={{ fontFamily: "system-ui, sans-serif", color: "var(--text)", minHeight: "100vh" }}>
 
-      {/* En-tête */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: "1.5rem" }}>
+      {/* Header */}
+      <div style={{ background: "#16a34a", color: "#fff", padding: "14px 24px", display: "flex", alignItems: "center", gap: 12, marginBottom: "1.5rem" }}>
+        {onBack && (
+          <button onClick={onBack} style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid rgba(255,255,255,0.3)", background: "transparent", color: "rgba(255,255,255,0.8)", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
+            ← Menu
+          </button>
+        )}
+        <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.22)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17 }}>📊</div>
         <div>
-          <h2 style={{ fontSize: 20, fontWeight: 500, margin: "0 0 4px", color: "var(--text)" }}>Plans factoriels 2ⁿ</h2>
-          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
-            Estimation des effets principaux et des interactions · BTS Métiers de la Chimie
-          </p>
+          <div style={{ fontSize: 15, fontWeight: 700 }}>Plan factoriel 2ⁿ</div>
+          <div style={{ fontSize: 11, opacity: 0.6, marginTop: 1 }}>BTS Métiers de la Chimie — Module Plans d'expériences</div>
         </div>
       </div>
+
+      <div style={{ maxWidth: 1040, margin: "0 auto", padding: "0 1rem 1rem" }}>
 
       {/* Barre de progression cliquable */}
       <ProgressBar step={step} maxStep={maxStep} onStep={(n) => setStep(n)} />
@@ -1581,6 +1587,7 @@ export default function PlanFactoriel({ onBack }) {
           onBack={() => setStep(2)} onRestart={restart}
         />
       )}
+      </div>
     </div>
   );
 }
