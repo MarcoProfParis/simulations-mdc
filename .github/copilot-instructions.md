@@ -18,6 +18,14 @@ npm run deploy    # Build + déploiement sur GitHub Pages
 
 Il n'existe pas de suite de tests dans ce projet.
 
+## Workflow deploy
+
+Après chaque `npm run deploy`, surveiller automatiquement le workflow GitHub Actions **pages build and deployment** du dépôt `marcoprofparis/simulations-mdc` :
+- Interroger l'API publique `https://api.github.com/repos/marcoprofparis/simulations-mdc/actions/runs?per_page=1` **toutes les 20 secondes**
+- Afficher le statut à chaque vérification (`queued`, `in_progress`, `completed`)
+- Dès que `status = completed`, émettre un son système macOS avec `afplay /System/Library/Sounds/Glass.aiff` (succès) ou `afplay /System/Library/Sounds/Basso.aiff` (échec)
+- Utiliser un script bash en mode async avec `read_bash` pour suivre la progression
+
 ## Architecture
 
 - **React 19 + Vite** — pas de React Router ; la navigation est gérée par état React
