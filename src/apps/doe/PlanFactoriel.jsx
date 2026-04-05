@@ -3,6 +3,7 @@ import { useTheme } from "../../ThemeContext";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { EXAMPLE_FILES } from "./exampleFiles";
 
+
 function classNames(...classes) {
   return classes.filter(Boolean).join(" ");
 }
@@ -126,9 +127,7 @@ function calcStatsWithReps(ts, C, rawObs) {
   return { resids, yhat, R2, R2adj, F: Fstat, pF, dfR, dfE, rawObs: true };
 }
 
-
-
-
+// ── fichiers de données exemples ──────────────────────────────────────────────
 
 const MODEL_DEFS = [
   { id: "lin",  lb: "Modèle linéaire",      col: "#0f6e56", bg: "#e1f5ee", desc: "Effets principaux uniquement",                      maxOrder: 1  },
@@ -137,16 +136,38 @@ const MODEL_DEFS = [
 ];
 
 // ─── tokens de couleur locaux (thème-agnostique, utilise CSS vars) ─────────────
+// Les *Bg utilisent des CSS vars pour s'adapter dark/light automatiquement
 const T = {
   green:    "#0f6e56",
-  greenBg:  "#e1f5ee",
+  greenBg:  "var(--color-green-bg, #e1f5ee)",
   purple:   "#534ab7",
-  purpleBg: "#eeedfe",
+  purpleBg: "var(--color-purple-bg, #eeedfe)",
   red:      "#993c1d",
-  redBg:    "#faece7",
+  redBg:    "var(--color-red-bg, #faece7)",
   amber:    "#ba7517",
-  amberBg:  "#fef3c7",
+  amberBg:  "var(--color-amber-bg, #fef3c7)",
 };
+
+// Injecte les CSS vars adaptatives une seule fois
+if (typeof document !== "undefined" && !document.getElementById("plan-theme-vars")) {
+  const style = document.createElement("style");
+  style.id = "plan-theme-vars";
+  style.textContent = `
+    :root {
+      --color-green-bg: #e1f5ee;
+      --color-purple-bg: #eeedfe;
+      --color-red-bg: #faece7;
+      --color-amber-bg: #fef3c7;
+    }
+    .dark, [data-theme="dark"] {
+      --color-green-bg: rgba(15,110,86,0.18);
+      --color-purple-bg: rgba(83,74,183,0.18);
+      --color-red-bg: rgba(153,60,29,0.18);
+      --color-amber-bg: rgba(186,117,23,0.18);
+    }
+  `;
+  document.head.appendChild(style);
+}
 
 // ─── composants utilitaires ────────────────────────────────────────────────────
 
@@ -155,9 +176,9 @@ function Card({ children, style }) {
     <div style={{
       background: "var(--bg-card)",
       border: "0.5px solid var(--border)",
-      borderRadius: 10,
-      padding: "1.25rem",
-      marginBottom: "1rem",
+      borderRadius: 8,
+      padding: "0.85rem 1rem",
+      marginBottom: "0.65rem",
       ...style,
     }}>
       {children}
@@ -167,7 +188,7 @@ function Card({ children, style }) {
 
 function SectionTitle({ children }) {
   return (
-    <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 10 }}>
+    <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "var(--text-muted)", marginBottom: 7 }}>
       {children}
     </div>
   );
@@ -175,9 +196,10 @@ function SectionTitle({ children }) {
 
 function Btn({ onClick, children, style, disabled, variant = "default" }) {
   const base = {
-    padding: "6px 16px", fontSize: 13, borderRadius: 6, cursor: disabled ? "not-allowed" : "pointer",
+    padding: "7px 14px", fontSize: 13, borderRadius: 6, cursor: disabled ? "not-allowed" : "pointer",
     fontWeight: 500, border: "0.5px solid var(--border)", transition: "opacity 0.15s",
-    opacity: disabled ? 0.35 : 1, ...style,
+    opacity: disabled ? 0.35 : 1, minHeight: 36, touchAction: "manipulation",
+    WebkitTapHighlightColor: "transparent", userSelect: "none", ...style,
   };
   if (variant === "primary") {
     return (
@@ -209,25 +231,26 @@ function ProgressBar({ step, maxStep, onStep }) {
     { n: 3, label: "Résultats" },
   ];
   return (
-    <div style={{ display: "flex", alignItems: "center", marginBottom: "1.75rem", gap: 0 }}>
+    <div style={{ display: "flex", alignItems: "center", marginBottom: "1.25rem", gap: 0 }}>
       {steps.map((s, i) => {
         const done      = s.n < step;
         const current   = s.n === step;
         const reachable = s.n <= maxStep && s.n !== step;
         return (
           <div key={s.n} style={{ display: "flex", alignItems: "center", flex: 1 }}>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 6 }}>
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
               <div
                 onClick={() => reachable && onStep(s.n)}
                 style={{
-                  width: 28, height: 28, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 12, fontWeight: 600,
+                  width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 11, fontWeight: 600,
                   background: done ? T.green : current ? "var(--text)" : "var(--bg-card)",
                   color:      done ? "#fff"  : current ? "var(--bg)" : "var(--text-muted)",
                   border:     done || current ? "none" : "0.5px solid var(--border)",
                   transition: "all 0.2s",
                   cursor: reachable ? "pointer" : "default",
                   boxShadow: reachable ? "0 0 0 2px var(--border)" : "none",
+                  touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
                 }}
               >
                 {done ? "✓" : s.n}
@@ -235,19 +258,20 @@ function ProgressBar({ step, maxStep, onStep }) {
               <span
                 onClick={() => reachable && onStep(s.n)}
                 style={{
-                  fontSize: 11, fontWeight: current ? 600 : 400,
+                  fontSize: 10, fontWeight: current ? 600 : 400,
                   color: current ? "var(--text)" : reachable ? "var(--text)" : "var(--text-muted)",
                   cursor: reachable ? "pointer" : "default",
                   textDecoration: reachable ? "underline" : "none",
                   textDecorationStyle: "dotted",
                   textUnderlineOffset: 3,
+                  touchAction: "manipulation",
                 }}
               >
                 {s.label}
               </span>
             </div>
             {i < steps.length - 1 && (
-              <div style={{ flex: 2, height: 1, background: done ? T.green : "var(--border)", marginBottom: 18, transition: "background 0.2s" }} />
+              <div style={{ flex: 2, height: 1, background: done ? T.green : "var(--border)", marginBottom: 16, transition: "background 0.2s" }} />
             )}
           </div>
         );
@@ -258,13 +282,13 @@ function ProgressBar({ step, maxStep, onStep }) {
 
 // ── styles tableaux ────────────────────────────────────────────────────────────
 const thStyle = {
-  background: "var(--bg-card)", padding: "7px 10px", textAlign: "center",
-  border: "0.5px solid var(--border)", fontWeight: 600, fontSize: 11,
-  color: "var(--text-muted)", lineHeight: 1.5,
+  background: "var(--bg-card)", padding: "5px 7px", textAlign: "center",
+  border: "0.5px solid var(--border)", fontWeight: 600, fontSize: 10,
+  color: "var(--text-muted)", lineHeight: 1.4,
 };
 const tdStyle = {
-  padding: "6px 8px", textAlign: "center",
-  border: "0.5px solid var(--border)", fontSize: 13, color: "var(--text)",
+  padding: "4px 6px", textAlign: "center",
+  border: "0.5px solid var(--border)", fontSize: 12, color: "var(--text)",
 };
 
 // ─── step 1 : facteurs ─────────────────────────────────────────────────────────
@@ -339,10 +363,10 @@ function Step1({ factors, setFactors, useCenter, setUseCenter, nrep, setNrep, rn
 
   return (
     <div>
-      <h2 style={{ fontSize: 18, fontWeight: 500, color: "var(--text)", marginBottom: 4 }}>Définir les facteurs</h2>
-      <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: "1.5rem", lineHeight: 1.6 }}>
-        Commencer par 2 facteurs est recommandé. Le point central est optionnel. Chargez un exemple pour découvrir l'outil.
-      </p>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6 }}>
+        <h2 style={{ fontSize: 16, fontWeight: 500, color: "var(--text)", margin: 0 }}>Définir les facteurs</h2>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>2 facteurs minimum · point central optionnel</span>
+      </div>
 
       {/* Exemples */}
       <Card>
@@ -558,73 +582,87 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
     }
     return (
       <div>
-        <h2 style={{ fontSize: 18, fontWeight: 500, color: "var(--text)", marginBottom: 4 }}>Matrice d'expériences</h2>
-        <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: "1rem", lineHeight: 1.6 }}>
-          Plan 2{SUP[n]} — <strong>{sorted.length} essais</strong>
-          {reps > 1 ? ` (${ne} combinaisons × ${reps} répétitions)` : ""}.
-          {reps > 1 && <span style={{ color: T.green, fontWeight: 500 }}> Moyennes et MSe calculées automatiquement.</span>}
-        </p>
-        <Card style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-            <thead>
-              <tr>
-                <th style={thStyle}>N°</th>
-                <th style={thStyle}>Ordre</th>
-                {factors.map((f, i) => (
-                  <th key={i} style={thStyle}>
-                    {xKeys[i]}<br />
-                    <span style={{ fontWeight: 400, color: "var(--text)" }}>{f.n}</span>
-                    {f.u ? <><br /><span style={{ fontWeight: 400, color: "var(--text-muted)", fontSize: 10 }}>({f.u})</span></> : null}
-                  </th>
-                ))}
-                {iTerms.map((t, i) => (
-                  <th key={i} style={{ ...thStyle, color: "var(--text-muted)", fontSize: 10 }}>
-                    {t.ix.map(j => xKeys[j]).join("·")}
-                  </th>
-                ))}
-                <th style={{ ...thStyle, color: T.purple }}>{rname}{runit ? ` (${runit})` : ""}</th>
-                {reps > 1 && <th style={{ ...thStyle, color: T.green, fontSize: 10 }}>Moy.</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((row, ri) => {
-                const lv = xKeys.map(k => row[k]);
-                const key = combKey(row);
-                const grp = combGroups[key] || [];
-                const groupMean = grp.length > 0 ? grp.reduce((a, b) => a + b) / grp.length : null;
-                const rowsInGroup = sorted.filter(r => combKey(r) === key);
-                const isLastInGroup = rowsInGroup[rowsInGroup.length - 1] === row;
-                const groupIdx = Object.keys(combGroups).indexOf(key);
-                return (
-                  <tr key={ri} style={{ background: groupIdx % 2 === 0 ? "transparent" : "var(--bg-card)" }}>
-                    <td style={{ ...tdStyle, color: "var(--text-muted)", fontSize: 11 }}>{row.exp_no}</td>
-                    <td style={{ ...tdStyle, color: "var(--text-muted)", fontSize: 11 }}>{row.run_order}</td>
-                    {lv.map((v, fi) => (
-                      <td key={fi} style={{ ...tdStyle, color: v === 1 ? T.green : T.red, fontWeight: 600 }}>
-                        {v === 1 ? "+1" : "\u22121"}
-                        <br />
-                        <span style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 400 }}>
-                          {v === 1 ? factors[fi].hi : factors[fi].lo}
-                        </span>
-                      </td>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+          <h2 style={{ fontSize: 16, fontWeight: 500, color: "var(--text)", margin: 0 }}>Matrice d'expériences</h2>
+          <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+            Plan 2{SUP[n]} — <strong>{sorted.length} essais</strong>
+            {reps > 1 ? ` · ${ne} comb. × ${reps} rép.` : ""}
+            {reps > 1 && <span style={{ color: T.green, fontWeight: 500 }}> · Moy. auto.</span>}
+          </span>
+        </div>
+        <Card style={{ padding: 0, overflow: "hidden" }}>
+          <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+            <div style={{
+              maxHeight: "calc(10 * 33px + 36px)",
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              scrollbarWidth: "thin",
+            }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+                <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
+                  <tr>
+                    <th style={{ ...thStyle, fontSize: 10 }}>N°</th>
+                    <th style={{ ...thStyle, fontSize: 10 }}>Ord.</th>
+                    {factors.map((f, i) => (
+                      <th key={i} style={{ ...thStyle, fontSize: 10 }}>
+                        {xKeys[i]}<br />
+                        <span style={{ fontWeight: 400, color: "var(--text)", fontSize: 9 }}>{f.n.length > 8 ? f.n.slice(0,8)+"…" : f.n}</span>
+                      </th>
                     ))}
-                    {iTerms.map((t, ti) => {
-                      const iv = t.ix.reduce((a, j) => a * lv[j], 1);
-                      return <td key={ti} style={{ ...tdStyle, color: "var(--text-muted)", fontWeight: 500, fontSize: 11 }}>{iv === 1 ? "+1" : "\u22121"}</td>;
-                    })}
-                    <td style={{ ...tdStyle, fontWeight: 500 }}>{(row[yKey]).toFixed(3)}</td>
-                    {reps > 1 && (
-                      <td style={{ ...tdStyle, fontWeight: 600, color: T.green, background: "var(--bg-card)", fontSize: 11 }}>
-                        {isLastInGroup && groupMean !== null ? groupMean.toFixed(3) : ""}
-                      </td>
-                    )}
+                    {iTerms.map((t, i) => (
+                      <th key={i} style={{ ...thStyle, color: "var(--text-muted)", fontSize: 9 }}>
+                        {t.ix.map(j => xKeys[j]).join("·")}
+                      </th>
+                    ))}
+                    <th style={{ ...thStyle, color: T.purple, fontSize: 10 }}>{rname}{runit ? ` (${runit})` : ""}</th>
+                    {reps > 1 && <th style={{ ...thStyle, color: T.green, fontSize: 9 }}>Moy.</th>}
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                </thead>
+                <tbody>
+                  {sorted.map((row, ri) => {
+                    const lv = xKeys.map(k => row[k]);
+                    const key = combKey(row);
+                    const grp = combGroups[key] || [];
+                    const groupMean = grp.length > 0 ? grp.reduce((a, b) => a + b) / grp.length : null;
+                    const rowsInGroup = sorted.filter(r => combKey(r) === key);
+                    const isLastInGroup = rowsInGroup[rowsInGroup.length - 1] === row;
+                    const groupIdx = Object.keys(combGroups).indexOf(key);
+                    return (
+                      <tr key={ri} style={{ background: groupIdx % 2 === 0 ? "transparent" : "var(--bg-card)", height: 33 }}>
+                        <td style={{ ...tdStyle, color: "var(--text-muted)", fontSize: 10, padding: "3px 5px" }}>{row.exp_no}</td>
+                        <td style={{ ...tdStyle, color: "var(--text-muted)", fontSize: 10, padding: "3px 5px" }}>{row.run_order}</td>
+                        {lv.map((v, fi) => (
+                          <td key={fi} style={{ ...tdStyle, color: v === 1 ? T.green : T.red, fontWeight: 600, padding: "3px 5px", fontSize: 11 }}>
+                            {v === 1 ? "+1" : "−1"}
+                            <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 400, lineHeight: 1 }}>
+                              {v === 1 ? factors[fi].hi : factors[fi].lo}
+                            </div>
+                          </td>
+                        ))}
+                        {iTerms.map((t, ti) => {
+                          const iv = t.ix.reduce((a, j) => a * lv[j], 1);
+                          return <td key={ti} style={{ ...tdStyle, color: "var(--text-muted)", fontWeight: 500, fontSize: 10, padding: "3px 4px" }}>{iv === 1 ? "+1" : "−1"}</td>;
+                        })}
+                        <td style={{ ...tdStyle, fontWeight: 500, fontSize: 11, padding: "3px 6px" }}>{(row[yKey]).toFixed(3)}</td>
+                        {reps > 1 && (
+                          <td style={{ ...tdStyle, fontWeight: 600, color: T.green, background: "var(--bg-card)", fontSize: 10, padding: "3px 5px" }}>
+                            {isLastInGroup && groupMean !== null ? groupMean.toFixed(2) : ""}
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+            {sorted.length > 10 && (
+              <div style={{ padding: "5px 10px", fontSize: 11, color: "var(--text-muted)", background: "var(--bg-card)", borderTop: "0.5px solid var(--border)", textAlign: "center" }}>
+                ↕ {sorted.length} lignes — faites défiler pour voir toutes les expériences
+              </div>
+            )}
+          </div>
         </Card>
-        <div style={{ display: "flex", gap: 10 }}>
+        <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
           <Btn onClick={onBack}>← Retour</Btn>
           <Btn variant="primary" onClick={handleCalcFromMatrix}>Calculer →</Btn>
         </div>
@@ -667,26 +705,23 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
     return dfe > 0 ? { MSe: SSe / dfe, dfe } : null;
   }
 
-  const inputNum = {
-    width: reps > 1 ? 68 : 72, textAlign: "center", fontSize: 13, padding: "4px 6px", height: 30,
-    border: "0.5px solid var(--border)", borderRadius: 5, background: "var(--bg)", color: "var(--text)",
-    outline: "none",
-  };
-
   return (
     <div>
-      <h2 style={{ fontSize: 18, fontWeight: 500, color: "var(--text)", marginBottom: 4 }}>Matrice d'expériences</h2>
-      <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: "1rem", lineHeight: 1.6 }}>
-        Plan 2{SUP[n]} — {ne} combinaisons{reps > 1 ? ` × ${reps} répétitions = ${ne * reps} essais` : ""}{useCenter ? ` + ${nrep} au point central` : ""}.
-        {reps > 1 && <span style={{ color: T.green, fontWeight: 500 }}> Les moyennes par combinaison sont calculées automatiquement.</span>}
-      </p>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 6, flexWrap: "wrap" }}>
+        <h2 style={{ fontSize: 16, fontWeight: 500, color: "var(--text)", margin: 0 }}>Matrice d'expériences</h2>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+          Plan 2{SUP[n]} — {ne} comb.{reps > 1 ? ` × ${reps} rép. = ${ne * reps} essais` : ""}{useCenter ? ` + ${nrep} centre` : ""}
+          {reps > 1 && <span style={{ color: T.green, fontWeight: 500 }}> · Moy. auto.</span>}
+        </span>
+      </div>
 
       {reps === 1 && (
-        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, fontSize: 13, color: "var(--text-muted)" }}>
-          <label>Répétitions par combinaison :</label>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, fontSize: 12, color: "var(--text-muted)", flexWrap: "wrap" }}>
+          <label>Répétitions :</label>
           {[1, 2, 3, 4].map((r) => (
             <button key={r} onClick={() => { setReps(r); setResponses(Array(ne * r).fill("")); }}
-              style={{ padding: "3px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer",
+              style={{ padding: "4px 12px", borderRadius: 6, fontSize: 12, cursor: "pointer", minHeight: 32,
+                touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
                 border: reps === r ? "1.5px solid var(--text)" : "0.5px solid var(--border)",
                 background: reps === r ? "var(--text)" : "var(--bg-card)",
                 color: reps === r ? "var(--bg)" : "var(--text-muted)", fontWeight: reps === r ? 600 : 400 }}>
@@ -696,97 +731,115 @@ function Step3({ factors, useCenter, nrep, rname, runit, responses, setResponses
         </div>
       )}
 
-      <Card style={{ overflowX: "auto" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr>
-              <th style={thStyle}>Comb.</th>
-              {factors.map((f, i) => (
-                <th key={i} style={thStyle}>
-                  X{sb(i + 1)}<br />
-                  <span style={{ fontWeight: 400, color: "var(--text)" }}>{f.n}</span>
-                  {f.u ? <><br /><span style={{ fontWeight: 400, color: "var(--text-muted)" }}>({f.u})</span></> : null}
-                </th>
-              ))}
-              {iTerms.map((t, i) => (
-                <th key={i} style={{ ...thStyle, color: "var(--text-muted)", fontSize: 10 }}>
-                  {t.ix.map((j) => "X" + sb(j + 1)).join("·")}
-                </th>
-              ))}
-              {reps > 1
-                ? Array.from({ length: reps }, (_, k) => (
-                    <th key={"rep" + k} style={{ ...thStyle, color: T.purple }}>
-                      {rname}{runit ? ` (${runit})` : ""}<br />
-                      <span style={{ fontWeight: 400, color: "var(--text-muted)", fontSize: 10 }}>Rép. {k + 1}</span>
+      <Card style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <div style={{
+            maxHeight: `calc(10 * 34px + 36px)`,
+            overflowY: "auto",
+            WebkitOverflowScrolling: "touch",
+            scrollbarWidth: "thin",
+          }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 11 }}>
+              <thead style={{ position: "sticky", top: 0, zIndex: 2 }}>
+                <tr>
+                  <th style={{ ...thStyle, fontSize: 10 }}>Comb.</th>
+                  {factors.map((f, i) => (
+                    <th key={i} style={{ ...thStyle, fontSize: 10 }}>
+                      X{sb(i + 1)}<br />
+                      <span style={{ fontWeight: 400, color: "var(--text)", fontSize: 9 }}>{f.n.length > 8 ? f.n.slice(0,8)+"…" : f.n}</span>
                     </th>
-                  ))
-                : <th style={{ ...thStyle, color: T.purple }}>{rname}{runit ? ` (${runit})` : ""}</th>
-              }
-              {reps > 1 && (
-                <th style={{ ...thStyle, color: T.green, fontSize: 10 }}>Moyenne</th>
-              )}
-            </tr>
-          </thead>
-          <tbody>
-            {Array.from({ length: ne }, (_, r) => {
-              const lv = lvls(r, n);
-              const repVals = Array.from({ length: reps }, (_, k) => Number(responses[r * reps + k]));
-              const validVals = repVals.filter((v) => !isNaN(v) && responses[r * reps + (repVals.indexOf(v))] !== "");
-              const mean = validVals.length > 0 ? (validVals.reduce((a, b) => a + b) / validVals.length) : null;
-              return (
-                <tr key={r} style={{ background: r % 2 === 0 ? "transparent" : "var(--bg-card)" }}>
-                  <td style={{ ...tdStyle, color: "var(--text-muted)", fontSize: 12 }}>{r + 1}</td>
-                  {lv.map((v, fi) => (
-                    <td key={fi} style={{ ...tdStyle, color: v === 1 ? T.green : T.red, fontWeight: 600 }}>
-                      {v === 1 ? "+1" : "−1"}
-                      <br />
-                      <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>{v === 1 ? factors[fi].hi || "+1" : factors[fi].lo || "−1"}</span>
-                    </td>
                   ))}
-                  {iTerms.map((t, ti) => { const v = t.ix.reduce((a, j) => a * lv[j], 1); return <td key={ti} style={{ ...tdStyle, color: "var(--text-muted)", fontWeight: 500 }}>{v === 1 ? "+1" : "−1"}</td>; })}
-                  {Array.from({ length: reps }, (_, k) => (
-                    <td key={"rep" + k} style={tdStyle}>
-                      <input type="number"
-                        value={responses[r * reps + k] || ""}
-                        onChange={(e) => { const r2 = [...responses]; r2[r * reps + k] = e.target.value; setResponses(r2); }}
-                        placeholder="—" step="any" style={inputNum} />
-                    </td>
+                  {iTerms.map((t, i) => (
+                    <th key={i} style={{ ...thStyle, color: "var(--text-muted)", fontSize: 9 }}>
+                      {t.ix.map((j) => "X" + sb(j + 1)).join("·")}
+                    </th>
                   ))}
+                  {reps > 1
+                    ? Array.from({ length: reps }, (_, k) => (
+                        <th key={"rep" + k} style={{ ...thStyle, color: T.purple, fontSize: 10 }}>
+                          {rname.slice(0,6)}{runit ? ` (${runit})` : ""}<br />
+                          <span style={{ fontWeight: 400, color: "var(--text-muted)", fontSize: 9 }}>Rép. {k + 1}</span>
+                        </th>
+                      ))
+                    : <th style={{ ...thStyle, color: T.purple, fontSize: 10 }}>{rname}{runit ? ` (${runit})` : ""}</th>
+                  }
                   {reps > 1 && (
-                    <td style={{ ...tdStyle, fontWeight: 600, color: mean !== null ? T.green : "var(--text-muted)", background: "var(--bg-card)" }}>
-                      {mean !== null ? mean.toFixed(2) : "—"}
-                    </td>
+                    <th style={{ ...thStyle, color: T.green, fontSize: 9 }}>Moy.</th>
                   )}
                 </tr>
-              );
-            })}
-            {useCenter && centerResponses.map((val, c) => (
-              <tr key={"c" + c} style={{ background: "var(--bg-card)" }}>
-                <td style={{ ...tdStyle, color: "var(--text-muted)", fontSize: 12 }}>{ne + c + 1}</td>
-                {factors.map((f, fi) => (
-                  <td key={fi} style={{ ...tdStyle, color: T.purple, fontWeight: 600 }}>
-                    0<br /><span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 400 }}>{f.mi || "0"}</span>
-                  </td>
+              </thead>
+              <tbody>
+                {Array.from({ length: ne }, (_, r) => {
+                  const lv = lvls(r, n);
+                  const repVals = Array.from({ length: reps }, (_, k) => Number(responses[r * reps + k]));
+                  const validVals = repVals.filter((v) => !isNaN(v) && responses[r * reps + (repVals.indexOf(v))] !== "");
+                  const mean = validVals.length > 0 ? (validVals.reduce((a, b) => a + b) / validVals.length) : null;
+                  return (
+                    <tr key={r} style={{ background: r % 2 === 0 ? "transparent" : "var(--bg-card)", height: 34 }}>
+                      <td style={{ ...tdStyle, color: "var(--text-muted)", fontSize: 10, padding: "2px 5px" }}>{r + 1}</td>
+                      {lv.map((v, fi) => (
+                        <td key={fi} style={{ ...tdStyle, color: v === 1 ? T.green : T.red, fontWeight: 600, padding: "2px 5px", fontSize: 11 }}>
+                          {v === 1 ? "+1" : "−1"}
+                          <div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 400, lineHeight: 1 }}>{v === 1 ? factors[fi].hi || "+1" : factors[fi].lo || "−1"}</div>
+                        </td>
+                      ))}
+                      {iTerms.map((t, ti) => { const v = t.ix.reduce((a, j) => a * lv[j], 1); return <td key={ti} style={{ ...tdStyle, color: "var(--text-muted)", fontWeight: 500, fontSize: 10, padding: "2px 4px" }}>{v === 1 ? "+1" : "−1"}</td>; })}
+                      {Array.from({ length: reps }, (_, k) => (
+                        <td key={"rep" + k} style={{ ...tdStyle, padding: "2px 3px" }}>
+                          <input type="number"
+                            value={responses[r * reps + k] || ""}
+                            onChange={(e) => { const r2 = [...responses]; r2[r * reps + k] = e.target.value; setResponses(r2); }}
+                            placeholder="—" step="any"
+                            style={{ width: reps > 1 ? 60 : 68, textAlign: "center", fontSize: 12, padding: "3px 4px", height: 28,
+                              border: "0.5px solid var(--border)", borderRadius: 4, background: "var(--bg)", color: "var(--text)", outline: "none",
+                              touchAction: "manipulation" }} />
+                        </td>
+                      ))}
+                      {reps > 1 && (
+                        <td style={{ ...tdStyle, fontWeight: 600, color: mean !== null ? T.green : "var(--text-muted)", background: "var(--bg-card)", fontSize: 10, padding: "2px 5px" }}>
+                          {mean !== null ? mean.toFixed(2) : "—"}
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
+                {useCenter && centerResponses.map((val, c) => (
+                  <tr key={"c" + c} style={{ background: "var(--bg-card)", height: 34 }}>
+                    <td style={{ ...tdStyle, color: "var(--text-muted)", fontSize: 10, padding: "2px 5px" }}>{ne + c + 1}</td>
+                    {factors.map((f, fi) => (
+                      <td key={fi} style={{ ...tdStyle, color: T.purple, fontWeight: 600, padding: "2px 5px", fontSize: 11 }}>
+                        0<div style={{ fontSize: 9, color: "var(--text-muted)", fontWeight: 400, lineHeight: 1 }}>{f.mi || "0"}</div>
+                      </td>
+                    ))}
+                    {iTerms.map((_, ti) => <td key={ti} style={{ ...tdStyle, color: T.purple, fontWeight: 500, fontSize: 10, padding: "2px 4px" }}>0</td>)}
+                    <td colSpan={reps + (reps > 1 ? 1 : 0)} style={{ ...tdStyle, padding: "2px 3px" }}>
+                      <input type="number" value={val} onChange={(e) => { const cr = [...centerResponses]; cr[c] = e.target.value; setCenterResponses(cr); }}
+                        placeholder="—" step="any"
+                        style={{ width: 68, textAlign: "center", fontSize: 12, padding: "3px 4px", height: 28,
+                          border: "0.5px solid var(--border)", borderRadius: 4, background: "var(--bg)", color: "var(--text)", outline: "none",
+                          touchAction: "manipulation" }} />
+                    </td>
+                  </tr>
                 ))}
-                {iTerms.map((_, ti) => <td key={ti} style={{ ...tdStyle, color: T.purple, fontWeight: 500 }}>0</td>)}
-                <td colSpan={reps + (reps > 1 ? 1 : 0)} style={tdStyle}>
-                  <input type="number" value={val} onChange={(e) => { const cr = [...centerResponses]; cr[c] = e.target.value; setCenterResponses(cr); }}
-                    placeholder="—" step="any" style={inputNum} />
-                </td>
-              </tr>
-            ))}
-            {useCenter && (
-              <tr>
-                <td colSpan={2 + factors.length + iTerms.length} style={{ fontSize: 11, color: "var(--text-muted)", padding: "6px 10px", background: "var(--bg-card)", fontStyle: "italic" }}>
-                  ↑ Essais au point central — estimation de l'erreur pure et détection de courbure
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+                {useCenter && (
+                  <tr>
+                    <td colSpan={2 + factors.length + iTerms.length} style={{ fontSize: 10, color: "var(--text-muted)", padding: "4px 8px", background: "var(--bg-card)", fontStyle: "italic" }}>
+                      ↑ Essais au point central
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          {(ne * reps + (useCenter ? nrep : 0)) > 10 && (
+            <div style={{ padding: "4px 10px", fontSize: 10, color: "var(--text-muted)", background: "var(--bg-card)", borderTop: "0.5px solid var(--border)", textAlign: "center" }}>
+              ↕ {ne * reps + (useCenter ? nrep : 0)} lignes — faites défiler pour voir toutes les expériences
+            </div>
+          )}
+        </div>
       </Card>
 
-      <div style={{ display: "flex", gap: 10 }}>
+      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
         <Btn onClick={onBack}>← Retour</Btn>
         <Btn variant="primary" onClick={() => {
           const means = getMeans();
@@ -1101,86 +1154,41 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
   const bestCompareIdx = modelCompareRows.reduce((bi, m, i) =>
     m.R2adj > modelCompareRows[bi].R2adj ? i : bi, 0);
 
-  const ModelCompareTable = () => {
+  // ── Tableau comparatif (rendu inline dans RemodelBlock) ──────────────────────
+  const renderCompareTable = () => {
     const rowDefs = [
-      {
-        key: "nbCoeff",
-        label: "Nb coefficients",
-        fmt: (s) => s.nbCoeff,
-        color: () => "var(--text)",
-        bold: false,
-      },
-      {
-        key: "R2",
-        label: "R²",
-        fmt: (s) => s.R2.toFixed(4),
-        color: (s) => s.R2 > 0.9 ? T.green : s.R2 > 0.7 ? T.amber : T.red,
-        bold: true,
-      },
-      {
-        key: "R2adj",
-        label: "R² ajusté",
-        fmt: (s) => s.R2adj.toFixed(4),
-        color: (s, i) => i === bestCompareIdx ? T.green : s.R2adj > 0.7 ? T.amber : T.red,
-        bold: true,
-        isBestRow: true,
-      },
-      {
-        key: "F",
-        label: "F calculé",
-        fmt: (s) => s.F !== null ? s.F.toFixed(3) : "—",
-        color: () => "var(--text)",
-        bold: false,
-      },
-      {
-        key: "pF",
-        label: "Prob > F",
-        fmt: (s) => s.pF !== null ? (s.pF < 0.0001 ? "< 0.0001" : s.pF.toFixed(4)) : "—",
-        color: (s) => s.pF !== null && s.pF < 0.05 ? T.green : s.pF !== null ? T.red : "var(--text-muted)",
-        bold: true,
-      },
-      {
-        key: "ddl",
-        label: "ddl rég. / rés.",
-        fmt: (s) => `${s.dfR} / ${s.dfE}`,
-        color: () => "var(--text-muted)",
-        bold: false,
-      },
+      { key: "nbCoeff", label: "Nb coefficients",  fmt: (s) => s.nbCoeff,          color: ()     => "var(--text)",        bold: false },
+      { key: "R2",      label: "R²",               fmt: (s) => s.R2.toFixed(4),    color: (s)    => s.R2    > 0.9 ? T.green : s.R2    > 0.7 ? T.amber : T.red, bold: true },
+      { key: "R2adj",   label: "R² ajusté",        fmt: (s) => s.R2adj.toFixed(4), color: (s, i) => i === bestCompareIdx ? T.green : s.R2adj > 0.7 ? T.amber : T.red, bold: true, isBestRow: true },
+      { key: "F",       label: "F calculé",        fmt: (s) => s.F  !== null ? s.F.toFixed(3)  : "—", color: () => "var(--text)",        bold: false },
+      { key: "pF",      label: "Prob > F",         fmt: (s) => s.pF !== null ? (s.pF < 0.0001 ? "< 0.0001" : s.pF.toFixed(4)) : "—",
+        color: (s) => s.pF !== null && s.pF < 0.05 ? T.green : s.pF !== null ? T.red : "var(--text-muted)", bold: true },
+      { key: "ddl",     label: "ddl rég. / rés.",  fmt: (s) => `${s.dfR} / ${s.dfE}`, color: () => "var(--text-muted)", bold: false },
     ];
-
     const colW = `${Math.round(80 / modelCompareRows.length)}%`;
-
     return (
-      <Card style={{ border: `1px solid ${T.purple}33` }}>
-        <SectionTitle>Tableau comparatif — statistiques par modèle</SectionTitle>
-        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.6 }}>
-          Les valeurs se recalculent automatiquement lorsque vous activez ou désactivez des termes ci-dessus.
-          {excludedTerms.size > 0 && (
-            <span style={{ color: T.amber, fontWeight: 600 }}>
-              {" "}— {excludedTerms.size} terme{excludedTerms.size > 1 ? "s" : ""} exclu{excludedTerms.size > 1 ? "s" : ""} du modèle.
-            </span>
-          )}
-        </p>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <>
+        {excludedTerms.size > 0 && (
+          <p style={{ fontSize: 11, color: T.amber, margin: "0 0 8px", lineHeight: 1.4 }}>
+            ⚠ {excludedTerms.size} terme{excludedTerms.size > 1 ? "s" : ""} exclu{excludedTerms.size > 1 ? "s" : ""} — valeurs recalculées automatiquement.
+          </p>
+        )}
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
             <thead>
               <tr>
-                <th style={{ ...thStyle, textAlign: "left", minWidth: 130, width: "20%" }}>Critère</th>
+                <th style={{ ...thStyle, textAlign: "left", minWidth: 110, width: "22%", paddingLeft: 8 }}>Critère</th>
                 {modelCompareRows.map((m, i) => (
                   <th key={m.id} style={{
-                    ...thStyle,
-                    color: m.col,
-                    width: colW,
-                    background: i === bestCompareIdx ? m.bg : "var(--bg-card)",
+                    ...thStyle, color: m.col, width: colW,
+                    background: i === bestCompareIdx
+                      ? (dark ? `${m.col}25` : m.bg)
+                      : "var(--bg-card)",
                     borderBottom: i === bestCompareIdx ? `2px solid ${m.col}` : `0.5px solid var(--border)`,
-                    position: "relative",
                   }}>
                     {m.lb.replace("Modèle ", "")}
                     {i === bestCompareIdx && (
-                      <span style={{
-                        display: "block", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
-                        textTransform: "uppercase", color: m.col, marginTop: 2, opacity: 0.8,
-                      }}>★ meilleur</span>
+                      <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: "0.05em", textTransform: "uppercase", color: m.col }}>★ meilleur</div>
                     )}
                   </th>
                 ))}
@@ -1189,29 +1197,18 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
             <tbody>
               {rowDefs.map((row, ri) => (
                 <tr key={row.key} style={{ background: ri % 2 === 0 ? "transparent" : "var(--bg-card)" }}>
-                  <td style={{
-                    ...tdStyle, textAlign: "left", fontWeight: 600,
-                    fontSize: 12, color: "var(--text-muted)", paddingLeft: 12,
-                  }}>
+                  <td style={{ ...tdStyle, textAlign: "left", fontWeight: 600, fontSize: 11, color: "var(--text-muted)", paddingLeft: 8 }}>
                     {row.label}
                   </td>
                   {modelCompareRows.map((m, i) => {
-                    const val = row.fmt(m);
-                    const col = row.color(m, i);
                     const isBest = row.isBestRow && i === bestCompareIdx;
                     return (
                       <td key={m.id} style={{
-                        ...tdStyle,
-                        fontWeight: row.bold ? 700 : 400,
-                        color: col,
-                        background: isBest ? m.bg + "55" : "transparent",
-                        fontVariantNumeric: "tabular-nums",
-                        fontSize: 13,
+                        ...tdStyle, fontWeight: row.bold ? 700 : 400, color: row.color(m, i),
+                        background: isBest ? (dark ? `${m.col}20` : `${m.bg}88`) : "transparent",
+                        fontVariantNumeric: "tabular-nums", fontSize: 12,
                       }}>
-                        {val}
-                        {isBest && (
-                          <span style={{ marginLeft: 4, fontSize: 10, color: m.col }}>▲</span>
-                        )}
+                        {row.fmt(m)}{isBest && <span style={{ marginLeft: 3, fontSize: 9, color: m.col }}>▲</span>}
                       </td>
                     );
                   })}
@@ -1220,54 +1217,68 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
             </tbody>
           </table>
         </div>
-        {/* Légende couleurs */}
-        <div style={{ marginTop: 12, display: "flex", gap: 18, flexWrap: "wrap", fontSize: 11, color: "var(--text-muted)" }}>
-          <span><span style={{ color: T.green, fontWeight: 700 }}>■</span> Valeur favorable</span>
-          <span><span style={{ color: T.amber, fontWeight: 700 }}>■</span> Valeur acceptable</span>
-          <span><span style={{ color: T.red, fontWeight: 700 }}>■</span> Valeur défavorable</span>
-          <span><span style={{ color: "var(--text)", fontWeight: 700 }}>★</span> Meilleur R² ajusté</span>
+        <div style={{ marginTop: 7, display: "flex", gap: 12, flexWrap: "wrap", fontSize: 10, color: "var(--text-muted)" }}>
+          <span><span style={{ color: T.green, fontWeight: 700 }}>■</span> Favorable</span>
+          <span><span style={{ color: T.amber, fontWeight: 700 }}>■</span> Acceptable</span>
+          <span><span style={{ color: T.red,   fontWeight: 700 }}>■</span> Défavorable</span>
+          <span><span style={{ fontWeight: 700 }}>★</span> Meilleur R²adj</span>
         </div>
-      </Card>
+      </>
     );
   };
 
+  // ── ModelCompareTable conservé pour compatibilité (non utilisé dans remodel) ─
+  const ModelCompareTable = () => null;
+
   const RemodelBlock = () => (
-    <Card style={{ border: `1px solid ${T.purple}55`, background: `${T.purpleBg}55` }}>
-      <div style={{ marginBottom: 12 }}>
-        <SectionTitle>Optimisation du modèle — sélection des termes</SectionTitle>
-      </div>
-      <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.6 }}>
-        Décochez les termes à exclure du modèle. Les termes dont l'effet est faible ({"<"}15 % du max) sont suggérés.
+    <Card style={{ border: `1px solid ${T.purple}44` }}>
+      {/* ── 1. Tableau comparatif ── */}
+      <SectionTitle>Tableau comparatif — statistiques par modèle</SectionTitle>
+      {renderCompareTable()}
+
+      {/* ── Séparateur ── */}
+      <div style={{ height: 1, background: "var(--border)", margin: "12px 0" }} />
+
+      {/* ── 2. Sélection des termes ── */}
+      <SectionTitle>Sélection des termes — optimisation</SectionTitle>
+      <p style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 10, lineHeight: 1.5 }}>
+        Décochez les termes à exclure. Termes faibles (&lt;15 % du max) signalés par ⚠.
       </p>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 8, marginBottom: 16 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(170px, 1fr))", gap: 6, marginBottom: 10 }}>
         {allTermsForRemodel.map((t) => {
-          const v = fullC[t.lb] || 0;
+          const v       = fullC[t.lb] || 0;
           const excluded = excludedTerms.has(t.lb);
-          const tiny = isTiny(t);
-          const lb = t.o === 1 ? factors[t.ix[0]].n : t.ix.map((j) => factors[j].n.split(" ")[0]).join(" × ");
-          const pct = Math.round(Math.abs(v) / globalMax * 100);
+          const tiny    = isTiny(t);
+          const lb      = t.o === 1 ? factors[t.ix[0]].n : t.ix.map((j) => factors[j].n.split(" ")[0]).join(" × ");
+          const pct     = Math.round(Math.abs(v) / globalMax * 100);
           return (
             <label key={t.lb} onClick={() => {
               const s = new Set(excludedTerms);
               if (s.has(t.lb)) s.delete(t.lb); else s.add(t.lb);
-              setExcludedTerms(s);
-              setCompareApplied(false); // reset : le tableau n'est plus à jour
+              setExcludedTerms(s); setCompareApplied(false);
             }} style={{
-              display: "flex", alignItems: "center", gap: 10, padding: "8px 12px",
-              borderRadius: 8, cursor: "pointer",
-              border: excluded ? "0.5px solid var(--border)" : tiny ? `1px dashed ${T.amber}` : "0.5px solid var(--border)",
-              background: excluded ? "var(--bg-card)" : tiny ? T.amberBg : "var(--bg)",
-              opacity: excluded ? 0.45 : 1,
+              display: "flex", alignItems: "center", gap: 8, padding: "6px 10px",
+              borderRadius: 7, cursor: "pointer",
+              border: tiny && !excluded ? `1px dashed ${T.amber}` : "0.5px solid var(--border)",
+              background: excluded
+                ? "var(--bg-card)"
+                : tiny
+                  ? (dark ? `rgba(186,117,23,0.14)` : T.amberBg)
+                  : "var(--bg)",
+              opacity: excluded ? 0.4 : 1,
+              touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
+              minHeight: 40, userSelect: "none",
             }}>
-              <input type="checkbox" checked={!excluded} readOnly style={{ accentColor: T.purple, width: 14, height: 14 }} />
+              <input type="checkbox" checked={!excluded} readOnly
+                style={{ accentColor: T.purple, width: 15, height: 15, flexShrink: 0, pointerEvents: "none" }} />
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lb}</div>
-                <div style={{ display: "flex", alignItems: "center", gap: 6, marginTop: 3 }}>
-                  <div style={{ width: 60, height: 6, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
+                <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{lb}</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 2 }}>
+                  <div style={{ width: 44, height: 5, background: "var(--border)", borderRadius: 3, overflow: "hidden" }}>
                     <div style={{ height: "100%", width: pct + "%", background: v >= 0 ? T.green : T.red, borderRadius: 3 }} />
                   </div>
-                  <span style={{ fontSize: 11, color: v >= 0 ? T.green : T.red, fontWeight: 600 }}>{v.toFixed(3)}</span>
-                  {tiny && <span style={{ fontSize: 10, color: T.amber, fontWeight: 700 }}>⚠ faible</span>}
+                  <span style={{ fontSize: 10, color: v >= 0 ? T.green : T.red, fontWeight: 700 }}>{v.toFixed(2)}</span>
+                  {tiny && <span style={{ fontSize: 9, color: T.amber, fontWeight: 700 }}>⚠</span>}
                 </div>
               </div>
             </label>
@@ -1275,45 +1286,49 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
         })}
       </div>
 
-      {/* Stats preview du modèle remodélisé */}
-      <div style={{ background: "var(--bg)", borderRadius: 8, padding: "12px 16px", border: `1px solid ${T.purple}44`, marginBottom: 12 }}>
-        <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: T.purple, marginBottom: 10 }}>
+      {/* ── Aperçu stats remodélisé ── */}
+      <div style={{
+        background: dark ? `rgba(83,74,183,0.14)` : T.purpleBg,
+        borderRadius: 7, padding: "8px 12px",
+        border: `1px solid ${T.purple}55`, marginBottom: 10,
+      }}>
+        <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: T.purple, marginBottom: 5 }}>
           Aperçu — {activeTerms.length - 1} terme{activeTerms.length > 2 ? "s" : ""}
         </div>
-        <div style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12, color: "var(--text)", wordBreak: "break-word", lineHeight: 2, marginBottom: 10 }}>{remodelEq}</div>
-        <div style={{ display: "flex", gap: 24, flexWrap: "wrap", fontSize: 12 }}>
+        <div style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 11, color: "var(--text)", wordBreak: "break-word", lineHeight: 1.8, marginBottom: 6 }}>{remodelEq}</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap", fontSize: 11 }}>
           {[
-            ["R²", remodelStats.R2.toFixed(4), remodelStats.R2 > 0.9 ? T.green : T.amber],
-            ["R² ajusté", remodelStats.R2adj.toFixed(4), remodelStats.R2adj > 0.85 ? T.green : T.amber],
-            ["F", remodelStats.F !== null ? remodelStats.F.toFixed(3) : "—", "var(--text)"],
-            ["Prob > F", remodelStats.pF !== null ? (remodelStats.pF < 0.0001 ? "< 0.0001" : remodelStats.pF.toFixed(4)) : "—", remodelStats.pF !== null && remodelStats.pF < 0.05 ? T.green : T.red],
-            ["ddl rég. / rés.", `${remodelStats.dfR} / ${remodelStats.dfE}`, "var(--text)"],
+            ["R²",           remodelStats.R2.toFixed(4),    remodelStats.R2    > 0.9  ? T.green : T.amber],
+            ["R² ajusté",    remodelStats.R2adj.toFixed(4), remodelStats.R2adj > 0.85 ? T.green : T.amber],
+            ["F",            remodelStats.F  !== null ? remodelStats.F.toFixed(3)  : "—", "var(--text)"],
+            ["Prob > F",     remodelStats.pF !== null ? (remodelStats.pF < 0.0001 ? "< 0.0001" : remodelStats.pF.toFixed(4)) : "—",
+              remodelStats.pF !== null && remodelStats.pF < 0.05 ? T.green : T.red],
+            ["ddl rég./rés.", `${remodelStats.dfR} / ${remodelStats.dfE}`, "var(--text-muted)"],
           ].map(([lbl, val, col]) => (
-            <div key={lbl}>
-              <span style={{ color: "var(--text-muted)" }}>{lbl} </span>
-              <strong style={{ color: col }}>{val}</strong>
+            <div key={lbl} style={{ lineHeight: 1.5 }}>
+              <div style={{ color: "var(--text-muted)", fontSize: 10 }}>{lbl}</div>
+              <strong style={{ color: col, fontSize: 12 }}>{val}</strong>
             </div>
           ))}
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
         <Btn onClick={() => { setExcludedTerms(new Set()); setCompareApplied(false); }}>Tout réactiver</Btn>
         <Btn onClick={() => {
           const s = new Set(allTermsForRemodel.filter(isTiny).map((t) => t.lb));
-          setExcludedTerms(s);
-          setCompareApplied(false);
-        }} style={{ color: T.amber, borderColor: T.amber }}>⚠ Exclure les termes faibles</Btn>
+          setExcludedTerms(s); setCompareApplied(false);
+        }} style={{ color: T.amber, borderColor: T.amber }}>⚠ Termes faibles</Btn>
         {hasRemodel && (
           <Btn variant="primary" onClick={() => setCompareApplied(true)}
             style={{ background: compareApplied ? T.green : T.purple, border: "none" }}>
-            {compareApplied ? "✓ Comparaison mise à jour" : "↑ Mettre à jour la comparaison des modèles"}
+            {compareApplied ? "✓ Mis à jour" : "↑ Mettre à jour"}
           </Btn>
         )}
       </div>
       {hasRemodel && !compareApplied && (
-        <p style={{ fontSize: 11, color: T.amber, marginTop: 8, lineHeight: 1.5 }}>
-          ⚠ Le tableau de comparaison affiche encore les modèles standards. Cliquez sur "Mettre à jour" pour intégrer le modèle remodélisé.
+        <p style={{ fontSize: 10, color: T.amber, marginTop: 6, lineHeight: 1.4 }}>
+          ⚠ Cliquez sur "Mettre à jour" pour intégrer le modèle remodélisé dans les autres onglets.
         </p>
       )}
     </Card>
@@ -1326,15 +1341,18 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
     const sig = Math.abs(cv) > (Math.abs(C._ym) * 0.05 + 0.001);
     return (
       <div style={{
-        background: sig ? T.amberBg : T.greenBg, border: `0.5px solid ${sig ? T.amber : T.green}`,
-        color: sig ? T.amber : T.green, borderRadius: 10, padding: "12px 16px", fontSize: 13,
-        lineHeight: 2, marginBottom: "1rem",
+        background: dark
+          ? (sig ? "rgba(186,117,23,0.14)" : "rgba(15,110,86,0.14)")
+          : (sig ? T.amberBg : T.greenBg),
+        border: `0.5px solid ${sig ? T.amber : T.green}`,
+        color: sig ? T.amber : T.green, borderRadius: 8, padding: "10px 14px", fontSize: 12,
+        lineHeight: 1.9, marginBottom: "0.75rem",
       }}>
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>Analyse du point central</div>
+        <div style={{ fontWeight: 600, marginBottom: 3 }}>Analyse du point central</div>
         Moyenne factorielle ȳ : <strong>{C._ym.toFixed(4)}</strong><br />
         Moyenne au centre ȳ₀ : <strong>{C._ymc.toFixed(4)}</strong><br />
         Courbure (ȳ₀ − ȳ) : <strong>{cv >= 0 ? "+" : ""}{cv.toFixed(4)}</strong>
-        {" — "}<span style={{ fontSize: 12 }}>{sig ? "Courbure significative — envisager un plan composite." : "Courbure faible — plan factoriel adapté."}</span>
+        {" — "}<span style={{ fontSize: 11 }}>{sig ? "Courbure significative — envisager un plan composite." : "Courbure faible — plan factoriel adapté."}</span>
       </div>
     );
   };
@@ -1348,11 +1366,16 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
         const isRemodel = s.id === "remodel";
         const pFstr = s.pF !== null ? (s.pF < 0.0001 ? "< 0.0001" : s.pF.toFixed(4)) : "—";
         const pFgood = s.pF !== null && s.pF < 0.05;
+        const cardBg = isRemodel
+          ? (dark ? `rgba(83,74,183,0.18)` : T.purpleBg)
+          : isBest
+            ? (dark ? `${s.col}22` : s.bg + "55")
+            : "var(--bg)";
         return (
           <div key={i} style={{
             border: isRemodel ? `2px solid ${T.purple}` : isHighlighted ? `2px solid ${s.col}` : isBest ? `1.5px solid ${s.col}` : "0.5px solid var(--border)",
             borderRadius: 10, padding: 14, position: "relative",
-            background: isRemodel ? T.purpleBg + "55" : isBest ? s.bg + "55" : "var(--bg)",
+            background: cardBg,
           }}>
             {isRemodel && (
               <span style={{
@@ -1410,10 +1433,12 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
     if (!r2Ok) concl += `. R² ajusté faible — ajustement imparfait`;
     concl += `. La somme des résidus est nulle (propriété des moindres carrés).`;
     const col = pOk && r2Ok ? T.green : T.amber;
-    const bg  = pOk && r2Ok ? T.greenBg : T.amberBg;
+    const bg  = dark
+      ? (pOk && r2Ok ? "rgba(15,110,86,0.14)" : "rgba(186,117,23,0.14)")
+      : (pOk && r2Ok ? T.greenBg : T.amberBg);
     return (
-      <div style={{ background: bg, border: `0.5px solid ${col}`, color: col, borderRadius: 9, padding: "12px 16px", fontSize: 13, lineHeight: 1.8, marginTop: "1rem" }}>
-        <div style={{ fontWeight: 600, marginBottom: 4 }}>Conclusion</div>
+      <div style={{ background: bg, border: `0.5px solid ${col}`, color: col, borderRadius: 8, padding: "10px 14px", fontSize: 12, lineHeight: 1.8, marginTop: "0.75rem" }}>
+        <div style={{ fontWeight: 600, marginBottom: 3 }}>Conclusion</div>
         {concl}
       </div>
     );
@@ -1476,11 +1501,12 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               aria-current={activeTab === tab.id ? "page" : undefined}
+              style={{ touchAction: "manipulation", WebkitTapHighlightColor: "transparent" }}
               className={classNames(
                 activeTab === tab.id
                   ? "border-b-2 border-gray-800 text-gray-900 dark:border-white dark:text-white"
                   : "border-b-2 border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200",
-                "flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium whitespace-nowrap transition-colors -mb-px"
+                "flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors -mb-px"
               )}
             >
               <span className="text-base leading-none">{tab.icon}</span>
@@ -1497,13 +1523,13 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
 
   return (
     <div>
-      <h2 style={{ fontSize: 18, fontWeight: 500, color: "var(--text)", marginBottom: 4 }}>Résultats</h2>
-      <p style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: "1.25rem", lineHeight: 1.6 }}>
-        Plan factoriel 2{SUP[n]} — {ys.length} essais.
-      </p>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 4, flexWrap: "wrap" }}>
+        <h2 style={{ fontSize: 16, fontWeight: 500, color: "var(--text)", margin: 0 }}>Résultats</h2>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Plan factoriel 2{SUP[n]} — {ys.length} essais</span>
+      </div>
 
       <CentralBlock />
-      {tabBar}
+      <div style={{ marginBottom: "0.5rem" }}>{tabBar}</div>
 
       {/* ── Onglet Modèles ── */}
       {activeTab === "modeles" && (
@@ -1631,7 +1657,6 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
       {activeTab === "remodel" && (
         <div>
           <RemodelBlock />
-          <ModelCompareTable />
         </div>
       )}
 
@@ -1698,13 +1723,9 @@ export default function PlanFactoriel({ onBack }) {
     <div style={{ fontFamily: "system-ui, sans-serif", color: "var(--text)", maxWidth: 1040, margin: "0 auto", padding: "1rem 0" }}>
 
       {/* En-tête */}
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: "1.5rem" }}>
-        <div>
-          <h2 style={{ fontSize: 20, fontWeight: 500, margin: "0 0 4px", color: "var(--text)" }}>Plans factoriels 2ⁿ</h2>
-          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
-            Estimation des effets principaux et des interactions · BTS Métiers de la Chimie
-          </p>
-        </div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: "1rem" }}>
+        <h2 style={{ fontSize: 18, fontWeight: 500, margin: "0", color: "var(--text)" }}>Plans factoriels 2ⁿ</h2>
+        <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Effets principaux & interactions · BTS Chimie</span>
       </div>
 
       {/* Barre de progression cliquable */}
