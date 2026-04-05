@@ -243,6 +243,8 @@ export default function PlanFactoriel() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loadedExampleId, setLoadedExampleId] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [editMode, setEditMode] = useState(false);
+  const [editMeta, setEditMeta] = useState({ id: "", title: "", context: "", difficulty: "débutant", real_data: false, source: "" });
 
   const loadExample = async (ex) => {
     setLoadError(null);
@@ -276,7 +278,87 @@ export default function PlanFactoriel() {
     setModelPreset("default");
     setMatrix(null);
     setLoadedExampleId(null);
+    setEditMode(false);
+    setEditMeta({ id: "", title: "", context: "", difficulty: "débutant", real_data: false, source: "" });
     setSidebarOpen(false);
+  };
+
+  // ── édition exemple ──
+  const loadForEdit = async (ex) => {
+    setLoadError(null);
+    try {
+      const res = await fetch(ex.url);
+      if (!res.ok) throw new Error(`HTTP ${res.status} — ${ex.url}`);
+      const data = await res.json();
+      const { factors: f, responses: r, centerPoint: cp, modelDefault: md, matrix: m } = loadExampleData(data);
+      setFactors(f);
+      setResponses(r);
+      setCenterPoint(cp);
+      setModelDefault(md);
+      setModelActive([...md]);
+      setModelPreset("default");
+      setMatrix(m);
+      setLoadedExampleId(ex.file);
+      setEditMeta({
+        id: data.meta?.id || ex.file.replace(".json", ""),
+        title: data.meta?.title || ex.title,
+        context: data.meta?.context || ex.context,
+        difficulty: data.meta?.difficulty || ex.difficulty,
+        real_data: data.meta?.real_data ?? ex.real_data,
+        source: data.meta?.source || "",
+      });
+      setEditMode(true);
+      setSidebarOpen(false);
+      setPart(1);
+    } catch (e) {
+      console.error("Erreur chargement exemple:", e);
+      setLoadError(e.message);
+    }
+  };
+
+  const exportJSON = () => {
+    // Reconstruit les runs depuis la matrice courante
+    // Regroupe les lignes qui partagent les mêmes niveaux codés (réplicats)
+    const runsMap = new Map();
+    (matrix || []).forEach((row) => {
+      const key = JSON.stringify(row.coded);
+      if (!runsMap.has(key)) {
+        runsMap.set(key, { coded: row.coded, real: row.real, center: row.center, replicates: [] });
+      }
+      const rep = { rep: runsMap.get(key).replicates.length + 1 };
+      responses.forEach(r => { rep[r.id] = row.responses[r.id] ?? ""; });
+      runsMap.get(key).replicates.push(rep);
+    });
+    const runs = Array.from(runsMap.values()).map((r, i) => ({ id: i + 1, ...r }));
+
+    const json = {
+      meta: {
+        id: editMeta.id,
+        title: editMeta.title,
+        context: editMeta.context,
+        difficulty: editMeta.difficulty,
+        real_data: editMeta.real_data,
+        source: editMeta.source,
+      },
+      factors: factors.map(f => {
+        const base = { id: f.id, name: f.name, unit: f.unit || null, continuous: f.continuous };
+        if (f.continuous) { base.low = { real: f.low.real, coded: -1 }; base.high = { real: f.high.real, coded: 1 }; }
+        else { base.low = { label: f.low.label || "", coded: -1 }; base.high = { label: f.high.label || "", coded: 1 }; }
+        return base;
+      }),
+      responses: responses.map(r => ({ id: r.id, name: r.name, unit: r.unit || null })),
+      center_point: centerPoint,
+      model_default: modelDefault,
+      runs,
+    };
+
+    const blob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${editMeta.id || "plan"}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const goTo = (n) => {
@@ -468,23 +550,34 @@ export default function PlanFactoriel() {
                       <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Exemples</p>
                       <div className="flex flex-col gap-2">
                         {EXAMPLE_FILES.map((ex) => (
-                          <button key={ex.file} onClick={() => loadExample(ex)}
-                            className={`w-full text-left rounded-lg border px-3 py-2.5 transition-all ${
+                          <div key={ex.file} className={`rounded-lg border transition-all ${
                               loadedExampleId === ex.file
                                 ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-400"
-                                : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
+                                : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-500"
                             }`}>
-                            <div className="flex items-start justify-between gap-2 mb-1">
-                              <span className="text-xs font-medium text-gray-900 dark:text-white leading-tight">{ex.title}</span>
-                              {ex.real_data && (
-                                <span className="shrink-0 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-full px-1.5 py-0.5">réel</span>
-                              )}
+                            <button onClick={() => loadExample(ex)} className="w-full text-left px-3 pt-2.5 pb-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-lg transition-colors">
+                              <div className="flex items-start justify-between gap-2 mb-1">
+                                <span className="text-xs font-medium text-gray-900 dark:text-white leading-tight">{ex.title}</span>
+                                {ex.real_data && (
+                                  <span className="shrink-0 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-full px-1.5 py-0.5">réel</span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1.5">{ex.context}</p>
+                              <span className={`inline-block text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${diffBadgeCls[ex.difficulty] || diffBadgeCls["débutant"]}`}>
+                                {ex.difficulty}
+                              </span>
+                            </button>
+                            <div className="border-t border-gray-100 dark:border-gray-700 px-3 py-1.5 flex justify-end">
+                              <button onClick={() => loadForEdit(ex)}
+                                className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                                title="Éditer cet exemple">
+                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
+                                  <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+                                </svg>
+                                Éditer
+                              </button>
                             </div>
-                            <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">{ex.context}</p>
-                            <span className={`inline-block text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${diffBadgeCls[ex.difficulty] || diffBadgeCls["débutant"]}`}>
-                              {ex.difficulty}
-                            </span>
-                          </button>
+                          </div>
                         ))}
                       </div>
                     {loadError && (
@@ -527,6 +620,31 @@ export default function PlanFactoriel() {
       {/* ══════════════════════════════════════════════════════ PARTIE 1 */}
       {part === 1 && (
         <>
+          {/* bandeau mode édition + bouton export */}
+          {editMode && (
+            <div className="flex items-center justify-between bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-700 rounded-xl px-4 py-3 mb-4 gap-3">
+              <div className="flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-4 text-indigo-500">
+                  <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
+                </svg>
+                <span className="text-sm font-medium text-indigo-700 dark:text-indigo-300">Mode édition — {editMeta.title || loadedExampleId}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button onClick={() => { setEditMode(false); }}
+                  className="rounded-md border border-indigo-200 dark:border-indigo-700 px-2.5 py-1 text-xs text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors">
+                  Annuler
+                </button>
+                <button onClick={exportJSON}
+                  className="flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
+                    <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V12a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 1.414L10 16.414l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                  Exporter JSON
+                </button>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center justify-between mb-4">
             <button onClick={() => setSidebarOpen(true)}
               className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
@@ -536,6 +654,54 @@ export default function PlanFactoriel() {
                 : "Charger un exemple / Nouveau plan"}
             </button>
           </div>
+
+          {/* Section métadonnées — visible uniquement en mode édition */}
+          {editMode && (
+            <div className="bg-white dark:bg-gray-900 border border-indigo-200 dark:border-indigo-700 rounded-xl p-5 mb-4">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-indigo-400 dark:text-indigo-500 mb-3">Métadonnées de l'exemple</p>
+              <div className="grid grid-cols-1 gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">ID fichier</label>
+                    <input value={editMeta.id} onChange={e => setEditMeta({ ...editMeta, id: e.target.value })}
+                      className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Difficulté</label>
+                    <select value={editMeta.difficulty} onChange={e => setEditMeta({ ...editMeta, difficulty: e.target.value })}
+                      className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                      <option value="débutant">Débutant</option>
+                      <option value="intermédiaire">Intermédiaire</option>
+                      <option value="avancé">Avancé</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Titre</label>
+                  <input value={editMeta.title} onChange={e => setEditMeta({ ...editMeta, title: e.target.value })}
+                    className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Contexte</label>
+                  <input value={editMeta.context} onChange={e => setEditMeta({ ...editMeta, context: e.target.value })}
+                    className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Source</label>
+                  <input value={editMeta.source} onChange={e => setEditMeta({ ...editMeta, source: e.target.value })}
+                    placeholder="Auteur, publication, année…"
+                    className="w-full rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1.5 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" checked={editMeta.real_data} onChange={e => setEditMeta({ ...editMeta, real_data: e.target.checked })}
+                      className="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                    <span className="text-sm text-gray-700 dark:text-gray-200">Données réelles (badge "réel")</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Facteurs */}
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-4">
@@ -886,6 +1052,15 @@ export default function PlanFactoriel() {
               ← Retour
             </button>
             <div className="flex items-center gap-3">
+              {editMode && (
+                <button onClick={exportJSON}
+                  className="flex items-center gap-1.5 rounded-md border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
+                    <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V12a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 1.414L10 16.414l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                  Exporter JSON
+                </button>
+              )}
               {hasMissing && <span className="text-xs text-red-500 dark:text-red-400">Compléter les réponses pour continuer</span>}
               <button onClick={() => { if (!hasMissing) goTo(3); }} disabled={hasMissing}
                 className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
@@ -1008,9 +1183,20 @@ export default function PlanFactoriel() {
               className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
               ← Retour
             </button>
-            <button className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">
-              Continuer →
-            </button>
+            <div className="flex items-center gap-3">
+              {editMode && (
+                <button onClick={exportJSON}
+                  className="flex items-center gap-1.5 rounded-md border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
+                    <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V12a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 1.414L10 16.414l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                  Exporter JSON
+                </button>
+              )}
+              <button className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">
+                Continuer →
+              </button>
+            </div>
           </div>
         </>
       )}
