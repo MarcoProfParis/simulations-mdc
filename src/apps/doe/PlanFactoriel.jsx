@@ -223,61 +223,6 @@ function Badge({ children, color, bg }) {
 }
 
 // ─── barre de progression ──────────────────────────────────────────────────────
-function ProgressBar({ step, maxStep, onStep }) {
-  const steps = [
-    { n: 1, label: "Facteurs" },
-    { n: 2, label: "Matrice" },
-    { n: 3, label: "Résultats" },
-  ];
-  return (
-    <div style={{ display: "flex", alignItems: "center", marginBottom: "1.25rem", gap: 0 }}>
-      {steps.map((s, i) => {
-        const done      = s.n < step;
-        const current   = s.n === step;
-        const reachable = s.n <= maxStep && s.n !== step;
-        return (
-          <div key={s.n} style={{ display: "flex", alignItems: "center", flex: 1 }}>
-            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-              <div
-                onClick={() => reachable && onStep(s.n)}
-                style={{
-                  width: 26, height: 26, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: 11, fontWeight: 600,
-                  background: done ? T.green : current ? "var(--text)" : "var(--bg-card)",
-                  color:      done ? "#fff"  : current ? "var(--bg)" : "var(--text-muted)",
-                  border:     done || current ? "none" : "0.5px solid var(--border)",
-                  transition: "all 0.2s",
-                  cursor: reachable ? "pointer" : "default",
-                  boxShadow: reachable ? "0 0 0 2px var(--border)" : "none",
-                  touchAction: "manipulation", WebkitTapHighlightColor: "transparent",
-                }}
-              >
-                {done ? "✓" : s.n}
-              </div>
-              <span
-                onClick={() => reachable && onStep(s.n)}
-                style={{
-                  fontSize: 10, fontWeight: current ? 600 : 400,
-                  color: current ? "var(--text)" : reachable ? "var(--text)" : "var(--text-muted)",
-                  cursor: reachable ? "pointer" : "default",
-                  textDecoration: reachable ? "underline" : "none",
-                  textDecorationStyle: "dotted",
-                  textUnderlineOffset: 3,
-                  touchAction: "manipulation",
-                }}
-              >
-                {s.label}
-              </span>
-            </div>
-            {i < steps.length - 1 && (
-              <div style={{ flex: 2, height: 1, background: done ? T.green : "var(--border)", marginBottom: 16, transition: "background 0.2s" }} />
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 // ── styles tableaux ────────────────────────────────────────────────────────────
 const thStyle = {
@@ -1803,9 +1748,6 @@ export default function PlanFactoriel({ onBack }) {
         <h2 style={{ fontSize: 18, fontWeight: 500, margin: "0", color: "var(--text)" }}>Plans factoriels 2ⁿ</h2>
         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Effets principaux & interactions · BTS Chimie</span>
       </div>
-
-      {/* Barre de progression cliquable */}
-      <ProgressBar step={step} maxStep={maxStep} onStep={(n) => setStep(n)} />
 
       {/* Étapes */}
       {step === 1 && (
