@@ -3,6 +3,7 @@ import GouttteMouillage from "./apps/rheologie/GouttteMouillage"
 import ZismanApp from "./apps/rheologie/ZismanApp"
 import AppCouleur from "./apps/couleur/AppCouleur.jsx"
 import CIELABExplorer from "./apps/couleur/CIELABExplorer"
+import PlanFactoriel from "./apps/doe/PlanFactoriel"   // ← ajouter
 
 export const CATEGORIES = [
   {
@@ -58,4 +59,21 @@ export const CATEGORIES = [
       },
     ],
   },
+  // ── NOUVELLE CATÉGORIE ────────────────────────────────────────────────────
+  {
+    id: "doe",
+    label: "Plans d'expériences",
+    emoji: "🧪",
+    description: "Méthodologie des plans factoriels",
+    color: "#16a34a",
+    apps: [
+      {
+        id: "plan-factoriel",
+        label: "Plan factoriel",
+        description: "Plans 2ⁿ, effets principaux et interactions",
+        emoji: "📊",
+        component: PlanFactoriel,
+      },
+    ],
+  }
 ]
