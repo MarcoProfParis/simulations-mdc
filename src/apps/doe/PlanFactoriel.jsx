@@ -2,8 +2,31 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useTheme } from "../../ThemeContext";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { EXAMPLE_FILES } from "./exampleFiles";
+import {
+  Dialog,
+  DialogBackdrop,
+  DialogPanel,
+  DialogTitle,
+} from "@headlessui/react";
+import {
+  CheckIcon,
+  ExclamationTriangleIcon,
+  Bars3Icon,
+  XMarkIcon,
+  PlusIcon,
+  TrashIcon,
+  ArrowPathIcon,
+  BookOpenIcon,
+} from "@heroicons/react/24/outline";
 
 // ─── utilitaires ──────────────────────────────────────────────────────────────
+
+const DEFAULT_FACTORS = [
+  { id: "X1", name: "Facteur 1", unit: "", continuous: true, low: { real: 0, coded: -1 }, high: { real: 1, coded: 1 } },
+  { id: "X2", name: "Facteur 2", unit: "", continuous: true, low: { real: 0, coded: -1 }, high: { real: 1, coded: 1 } },
+];
+const DEFAULT_RESPONSES = [{ id: "Y1", name: "Réponse 1", unit: "" }];
+const DEFAULT_CENTER = { present: false, replicates: 1 };
 
 function genMatrix(factors, responses, centerPoint) {
   const n = factors.length;
@@ -49,8 +72,6 @@ function computeDefaultModel(factors) {
   return terms;
 }
 
-// Convention : terme quadratique pur = id + "2" (ex: "X12" = X1²)
-// terme d'interaction = id + id (ex: "X1X2")
 function quadPureTerm(id) { return id + "2"; }
 function isQuadPure(t, factors) { return factors.some(f => t === quadPureTerm(f.id)); }
 function isInteraction(t, factors) {
@@ -60,18 +81,13 @@ function isInteraction(t, factors) {
 function getAllPossibleTerms(factors) {
   const n = factors.length;
   const ids = factors.map(f => f.id);
-  // effets principaux
   const t = [...ids];
-  // termes quadratiques purs (X1², X2², ...)
   ids.forEach(id => t.push(quadPureTerm(id)));
-  // interactions ordre 2
   for (let i = 0; i < n; i++)
     for (let j = i + 1; j < n; j++) t.push(ids[i] + ids[j]);
-  // interactions ordre 3
   for (let i = 0; i < n; i++)
     for (let j = i + 1; j < n; j++)
       for (let k = j + 1; k < n; k++) t.push(ids[i] + ids[j] + ids[k]);
-  // interactions ordre 4
   for (let i = 0; i < n; i++)
     for (let j = i + 1; j < n; j++)
       for (let k = j + 1; k < n; k++)
@@ -82,19 +98,14 @@ function getAllPossibleTerms(factors) {
 function computePresetModel(preset, factors, modelDefault) {
   const n = factors.length;
   const ids = factors.map(f => f.id);
-  if (preset === "linear") {
-    // Ŷ = α₀ + Σ αᵢXᵢ
-    return [...ids];
-  }
+  if (preset === "linear") return [...ids];
   if (preset === "synergie") {
-    // Ŷ = α₀ + Σ αᵢXᵢ + Σ αᵢⱼXᵢXⱼ
     const t = [...ids];
     for (let i = 0; i < n; i++)
       for (let j = i + 1; j < n; j++) t.push(ids[i] + ids[j]);
     return t;
   }
   if (preset === "quadratic") {
-    // Ŷ = α₀ + Σ αᵢXᵢ + Σ αᵢᵢXᵢ² + Σ αᵢⱼXᵢXⱼ
     const t = [...ids];
     ids.forEach(id => t.push(quadPureTerm(id)));
     for (let i = 0; i < n; i++)
@@ -102,7 +113,6 @@ function computePresetModel(preset, factors, modelDefault) {
     return t;
   }
   if (preset === "cubic") {
-    // Ŷ = α₀ + Σ αᵢXᵢ + Σ αᵢⱼXᵢXⱼ + Σ αᵢⱼₖXᵢXⱼXₖ
     const t = [...ids];
     for (let i = 0; i < n; i++)
       for (let j = i + 1; j < n; j++) t.push(ids[i] + ids[j]);
@@ -120,29 +130,25 @@ function termOrder(t, factors) {
 }
 
 function formatTermDisplay(t, factors) {
-  // quadratic pure: "X12" -> "X1²"
-  for (let i = 0; i < factors.length; i++) {
+  for (let i = 0; i < factors.length; i++)
     if (t === quadPureTerm(factors[i].id)) return "X" + (i + 1) + "²";
-  }
   let s = t;
   factors.forEach((f, i) => { s = s.split(f.id).join("X" + (i + 1)); });
   return s;
 }
 
 function termSubScript(t, factors) {
-  for (let i = 0; i < factors.length; i++) {
-    if (t === quadPureTerm(factors[i].id)) return (i + 1) + (i + 1);
-  }
+  for (let i = 0; i < factors.length; i++)
+    if (t === quadPureTerm(factors[i].id)) return (i + 1) + "" + (i + 1);
   let s = t;
   factors.forEach((f, i) => { s = s.replaceAll(f.id, (i + 1).toString()); });
   return s;
 }
 
 function formatTermHTML(t, factors) {
-  for (let i = 0; i < factors.length; i++) {
+  for (let i = 0; i < factors.length; i++)
     if (t === quadPureTerm(factors[i].id))
       return "X<sub>" + (i + 1) + "</sub><sup>2</sup>";
-  }
   let s = t;
   factors.forEach((f, i) => { s = s.split(f.id).join("X<sub>" + (i + 1) + "</sub>"); });
   return s;
@@ -159,184 +165,79 @@ function getMissingRows(matrix, responses) {
   return [...new Set(missing)];
 }
 
-// ─── styles inline (compatibles dark mode via CSS vars) ───────────────────────
-
-const CSS = {
-  app: { maxWidth: 920, margin: "0 auto", padding: "1rem 0", fontFamily: "var(--font-sans, system-ui)" },
-  stepper: { display: "flex", alignItems: "center", gap: 0, marginBottom: "1.5rem" },
-  stepItem: (active, done) => ({
-    display: "flex", alignItems: "center", gap: 8, cursor: "pointer",
-    padding: "6px 12px", borderRadius: "var(--border-radius-md, 8px)",
-    background: "transparent",
-  }),
-  stepNum: (active, done) => ({
-    width: 24, height: 24, borderRadius: "50%", display: "flex",
-    alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 500,
-    flexShrink: 0, border: "0.5px solid",
-    background: done ? "#1D9E75" : active ? "var(--color-text-primary, #111)" : "var(--color-background-primary, #fff)",
-    color: done ? "#fff" : active ? "var(--color-background-primary, #fff)" : "var(--color-text-secondary, #666)",
-    borderColor: done ? "#1D9E75" : active ? "var(--color-text-primary, #111)" : "var(--color-border-secondary, #ccc)",
-  }),
-  stepLabel: (active) => ({
-    fontSize: 13,
-    color: active ? "var(--color-text-primary, #111)" : "var(--color-text-secondary, #666)",
-    fontWeight: active ? 500 : 400,
-  }),
-  stepSep: { flex: 1, height: "0.5px", background: "var(--color-border-tertiary, #e5e5e5)", minWidth: 12, maxWidth: 40 },
-  card: {
-    background: "var(--color-background-primary, #fff)",
-    border: "0.5px solid var(--color-border-tertiary, #e5e5e5)",
-    borderRadius: "var(--border-radius-lg, 12px)",
-    padding: "1rem 1.25rem", marginBottom: "1rem", position: "relative",
-  },
-  sectionLabel: {
-    fontSize: 11, fontWeight: 500, letterSpacing: "0.06em", textTransform: "uppercase",
-    color: "var(--color-text-secondary, #666)", marginBottom: 10,
-  },
-  input: {
-    fontFamily: "var(--font-sans, system-ui)", fontSize: 13,
-    color: "var(--color-text-primary, #111)",
-    background: "var(--color-background-primary, #fff)",
-    border: "0.5px solid var(--color-border-secondary, #ccc)",
-    borderRadius: "var(--border-radius-md, 8px)",
-    padding: "5px 9px", height: 32, outline: "none", boxSizing: "border-box",
-  },
-  select: {
-    fontFamily: "var(--font-sans, system-ui)", fontSize: 13,
-    color: "var(--color-text-primary, #111)",
-    background: "var(--color-background-primary, #fff)",
-    border: "0.5px solid var(--color-border-secondary, #ccc)",
-    borderRadius: "var(--border-radius-md, 8px)",
-    padding: "5px 9px", height: 32, outline: "none",
-  },
-  btn: {
-    fontFamily: "var(--font-sans, system-ui)", fontSize: 13, cursor: "pointer",
-    padding: "6px 14px", height: 32,
-    border: "0.5px solid var(--color-border-secondary, #ccc)",
-    background: "var(--color-background-primary, #fff)",
-    color: "var(--color-text-primary, #111)",
-    borderRadius: "var(--border-radius-md, 8px)",
-  },
-  btnPrimary: {
-    fontFamily: "var(--font-sans, system-ui)", fontSize: 13, cursor: "pointer",
-    padding: "7px 18px", height: 36, fontWeight: 500,
-    background: "var(--color-text-primary, #111)",
-    color: "var(--color-background-primary, #fff)",
-    border: "0.5px solid var(--color-text-primary, #111)",
-    borderRadius: "var(--border-radius-md, 8px)",
-  },
-  btnDanger: {
-    fontFamily: "var(--font-sans, system-ui)", fontSize: 12, cursor: "pointer",
-    padding: "3px 9px", height: 26,
-    border: "0.5px solid #E24B4A", background: "transparent", color: "#A32D2D",
-    borderRadius: "var(--border-radius-md, 8px)",
-  },
-  btnSmall: {
-    fontFamily: "var(--font-sans, system-ui)", fontSize: 12, cursor: "pointer",
-    padding: "3px 9px", height: 26,
-    border: "0.5px solid var(--color-border-secondary, #ccc)",
-    background: "var(--color-background-primary, #fff)",
-    color: "var(--color-text-primary, #111)",
-    borderRadius: "var(--border-radius-md, 8px)",
-  },
-  btnWarn: {
-    fontFamily: "var(--font-sans, system-ui)", fontSize: 12, cursor: "pointer",
-    padding: "3px 9px", height: 26,
-    background: "#FAEEDA", color: "#633806", border: "0.5px solid #EF9F27",
-    borderRadius: "var(--border-radius-md, 8px)",
-  },
-  btnAdd: {
-    fontFamily: "var(--font-sans, system-ui)", fontSize: 12, cursor: "pointer",
-    padding: "3px 9px", height: 26,
-    border: "0.5px dashed var(--color-border-secondary, #ccc)",
-    background: "transparent", color: "var(--color-text-secondary, #666)",
-    borderRadius: "var(--border-radius-md, 8px)",
-  },
-  muted: { color: "var(--color-text-secondary, #666)", fontSize: 12 },
-  divider: { height: "0.5px", background: "var(--color-border-tertiary, #e5e5e5)", margin: "12px 0" },
-  row: { display: "flex", alignItems: "center", gap: 8 },
-  sectionNav: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "1.25rem" },
-  alertWarn: {
-    background: "#FAEEDA", border: "0.5px solid #EF9F27",
-    borderRadius: "var(--border-radius-md, 8px)",
-    padding: "8px 12px", fontSize: 12, color: "#633806",
-    marginBottom: 10, display: "flex", alignItems: "center",
-    justifyContent: "space-between", gap: 12,
-  },
-  overlayWrap: {
-    position: "absolute", top: 0, left: 0, right: 0, bottom: 0,
-    background: "rgba(0,0,0,0.35)", display: "flex",
-    alignItems: "center", justifyContent: "center",
-    borderRadius: "var(--border-radius-lg, 12px)", zIndex: 10,
-  },
-  popupBox: {
-    background: "var(--color-background-primary, #fff)",
-    border: "0.5px solid var(--color-border-secondary, #ccc)",
-    borderRadius: "var(--border-radius-lg, 12px)",
-    padding: "1.25rem", maxWidth: 380, width: "100%",
-  },
-  modelTermOn: {
-    display: "inline-flex", alignItems: "center", gap: 4,
-    padding: "4px 10px", borderRadius: 20, fontSize: 12,
-    fontFamily: "var(--font-mono, monospace)", fontWeight: 500,
-    cursor: "pointer", border: "0.5px solid #5DCAA5",
-    background: "#E1F5EE", color: "#085041", margin: 3,
-  },
-  modelTermOff: {
-    display: "inline-flex", alignItems: "center", gap: 4,
-    padding: "4px 10px", borderRadius: 20, fontSize: 12,
-    fontFamily: "var(--font-mono, monospace)", fontWeight: 500,
-    cursor: "pointer", border: "0.5px solid var(--color-border-tertiary, #e5e5e5)",
-    background: "var(--color-background-secondary, #f5f5f5)",
-    color: "var(--color-text-secondary, #666)", margin: 3, opacity: 0.55,
-  },
-  modelTermConst: {
-    display: "inline-flex", alignItems: "center", gap: 4,
-    padding: "4px 10px", borderRadius: 20, fontSize: 12,
-    fontFamily: "var(--font-mono, monospace)", fontWeight: 500,
-    cursor: "default", border: "0.5px solid #AFA9EC",
-    background: "#EEEDFE", color: "#3C3489", margin: 3,
-  },
-  presetBtn: (sel) => ({
-    padding: "5px 12px",
-    border: sel ? "0.5px solid var(--color-text-primary, #111)" : "0.5px solid var(--color-border-secondary, #ccc)",
-    borderRadius: "var(--border-radius-md, 8px)", fontSize: 12,
-    background: sel ? "var(--color-text-primary, #111)" : "var(--color-background-primary, #fff)",
-    color: sel ? "var(--color-background-primary, #fff)" : "var(--color-text-secondary, #666)",
-    cursor: "pointer",
-  }),
-  levelBtn: (state) => {
-    const base = { flex: 1, padding: "5px 4px", borderRadius: "var(--border-radius-md, 8px)", fontSize: 12, fontFamily: "var(--font-mono, monospace)", cursor: "pointer", textAlign: "center", border: "0.5px solid" };
-    if (state === "neg") return { ...base, background: "#FAECE7", color: "#712B13", borderColor: "#F0997B", fontWeight: 500 };
-    if (state === "pos") return { ...base, background: "#E1F5EE", color: "#085041", borderColor: "#5DCAA5", fontWeight: 500 };
-    if (state === "zero") return { ...base, background: "#FAEEDA", color: "#633806", borderColor: "#EF9F27", fontWeight: 500 };
-    return { ...base, background: "var(--color-background-primary, #fff)", color: "var(--color-text-secondary, #666)", borderColor: "var(--color-border-secondary, #ccc)" };
-  },
-};
+function loadExampleData(exFile) {
+  const f = exFile.factors.map(fac => {
+    const base = { id: fac.id, name: fac.name, unit: fac.unit || "", continuous: fac.continuous };
+    if (fac.continuous) {
+      base.low = { real: fac.low.real, coded: -1 };
+      base.high = { real: fac.high.real, coded: 1 };
+    } else {
+      base.low = { label: fac.low.label || "", coded: -1 };
+      base.high = { label: fac.high.label || "", coded: 1 };
+    }
+    return base;
+  });
+  const r = exFile.responses.map(resp => ({ id: resp.id, name: resp.name, unit: resp.unit || "" }));
+  const cp = exFile.center_point
+    ? { present: exFile.center_point.present, replicates: exFile.center_point.replicates }
+    : { ...DEFAULT_CENTER };
+  const md = exFile.model_default || computeDefaultModel(f);
+  return { factors: f, responses: r, centerPoint: cp, modelDefault: md };
+}
 
 // ─── composant principal ──────────────────────────────────────────────────────
 
 export default function PlanFactoriel() {
   const { theme } = useTheme();
-  // EXAMPLE_FILES disponible pour usage futur (chargement d'exemples)
-  void EXAMPLE_FILES;
-  // ChevronDownIcon disponible pour usage futur (selects customisés)
+  void ChevronDownIcon;
 
   const [part, setPart] = useState(1);
-  const [factors, setFactors] = useState([
-    { id: "X1", name: "Température", unit: "°C", continuous: true, low: { real: 60, coded: -1 }, high: { real: 80, coded: 1 } },
-    { id: "X2", name: "pH", unit: "", continuous: true, low: { real: 4, coded: -1 }, high: { real: 7, coded: 1 } },
-  ]);
-  const [responses, setResponses] = useState([{ id: "Y1", name: "Rendement", unit: "%" }]);
-  const [centerPoint, setCenterPoint] = useState({ present: false, replicates: 1 });
+  const [factors, setFactors] = useState(DEFAULT_FACTORS.map(f => ({ ...f, low: { ...f.low }, high: { ...f.high } })));
+  const [responses, setResponses] = useState(DEFAULT_RESPONSES.map(r => ({ ...r })));
+  const [centerPoint, setCenterPoint] = useState({ ...DEFAULT_CENTER });
   const [matrix, setMatrix] = useState(null);
-  const [modelDefault, setModelDefault] = useState(["X1", "X2", "X1X2"]);
-  const [modelActive, setModelActive] = useState(["X1", "X2", "X1X2"]);
+  const [modelDefault, setModelDefault] = useState(() => computeDefaultModel(DEFAULT_FACTORS));
+  const [modelActive, setModelActive] = useState(() => computeDefaultModel(DEFAULT_FACTORS));
   const [modelPreset, setModelPreset] = useState("default");
   const [addRowLevels, setAddRowLevels] = useState(null);
-  const [showCubicPopup, setShowCubicPopup] = useState(false);
+  const [showRandomDialog, setShowRandomDialog] = useState(false);
+  const [showRandomDone, setShowRandomDone] = useState(false);
+  const [showCubicDialog, setShowCubicDialog] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [loadedExampleId, setLoadedExampleId] = useState(null);
 
-  // ── navigation ──
+  const loadExample = async (ex) => {
+    try {
+      const res = await fetch(`/examples/${ex.file}`);
+      const data = await res.json();
+      const { factors: f, responses: r, centerPoint: cp, modelDefault: md } = loadExampleData(data);
+      setFactors(f);
+      setResponses(r);
+      setCenterPoint(cp);
+      setModelDefault(md);
+      setModelActive([...md]);
+      setModelPreset("default");
+      setMatrix(null);
+      setLoadedExampleId(ex.file);
+      setSidebarOpen(false);
+    } catch (e) {
+      console.error("Erreur chargement exemple:", e);
+    }
+  };
+
+  const resetToNew = () => {
+    setFactors(DEFAULT_FACTORS.map(f => ({ ...f, low: { ...f.low }, high: { ...f.high } })));
+    setResponses(DEFAULT_RESPONSES.map(r => ({ ...r })));
+    setCenterPoint({ ...DEFAULT_CENTER });
+    const def = computeDefaultModel(DEFAULT_FACTORS);
+    setModelDefault(def);
+    setModelActive([...def]);
+    setModelPreset("default");
+    setMatrix(null);
+    setLoadedExampleId(null);
+    setSidebarOpen(false);
+  };
+
   const goTo = (n) => {
     if (n === 2 && !matrix) setMatrix(genMatrix(factors, responses, centerPoint));
     setPart(n);
@@ -352,7 +253,12 @@ export default function PlanFactoriel() {
     setPart(2);
   };
 
-  // ── facteurs ──
+  const recompModel = (f) => {
+    const def = computeDefaultModel(f);
+    setModelDefault(def); setModelActive([...def]); setModelPreset("default");
+    setMatrix(null);
+  };
+
   const updateFactor = (i, key, val) => {
     const f = [...factors];
     f[i] = { ...f[i], [key]: val };
@@ -360,10 +266,7 @@ export default function PlanFactoriel() {
       if (val) f[i].low = { real: 0, coded: -1 }, f[i].high = { real: 1, coded: 1 };
       else f[i].low = { label: "", coded: -1 }, f[i].high = { label: "", coded: 1 };
     }
-    setFactors(f);
-    const def = computeDefaultModel(f);
-    setModelDefault(def); setModelActive([...def]); setModelPreset("default");
-    setMatrix(null);
+    setFactors(f); recompModel(f);
   };
   const updateFactorLevel = (i, side, val) => {
     const f = [...factors];
@@ -378,20 +281,13 @@ export default function PlanFactoriel() {
   const addFactor = () => {
     const n = factors.length + 1;
     const f = [...factors, { id: "X" + n, name: "Facteur " + n, unit: "", continuous: true, low: { real: 0, coded: -1 }, high: { real: 1, coded: 1 } }];
-    setFactors(f);
-    const def = computeDefaultModel(f);
-    setModelDefault(def); setModelActive([...def]); setModelPreset("default");
-    setMatrix(null);
+    setFactors(f); recompModel(f);
   };
   const removeFactor = (i) => {
     const f = factors.filter((_, j) => j !== i).map((fac, j) => ({ ...fac, id: "X" + (j + 1) }));
-    setFactors(f);
-    const def = computeDefaultModel(f);
-    setModelDefault(def); setModelActive([...def]); setModelPreset("default");
-    setMatrix(null);
+    setFactors(f); recompModel(f);
   };
 
-  // ── réponses ──
   const updateResponse = (i, key, val) => {
     const r = [...responses]; r[i] = { ...r[i], [key]: val }; setResponses(r);
   };
@@ -401,7 +297,6 @@ export default function PlanFactoriel() {
   };
   const removeResponse = (i) => setResponses(responses.filter((_, j) => j !== i));
 
-  // ── matrice ──
   const updateCell = (ri, fid, val) => {
     const m = [...matrix];
     m[ri] = { ...m[ri], real: { ...m[ri].real, [fid]: +val } };
@@ -444,9 +339,10 @@ export default function PlanFactoriel() {
       return r;
     });
     setMatrix(m);
+    setShowRandomDialog(false);
+    setShowRandomDone(true);
   };
 
-  // ── modèle ──
   const toggleTerm = (t) => {
     const idx = modelActive.indexOf(t);
     if (idx >= 0) setModelActive(modelActive.filter(x => x !== t));
@@ -454,8 +350,7 @@ export default function PlanFactoriel() {
     setModelPreset("custom");
   };
   const applyPreset = (p) => {
-    if (p === "cubic" && factors.length < 3) { setShowCubicPopup(true); return; }
-    if (p === "synergie" && factors.length < 2) { setShowCubicPopup(true); return; }
+    if (p === "cubic" && factors.length < 3) { setShowCubicDialog(true); return; }
     setModelPreset(p);
     setModelActive(computePresetModel(p, factors, modelDefault));
   };
@@ -464,8 +359,8 @@ export default function PlanFactoriel() {
   const missingRows = matrix ? getMissingRows(matrix, responses) : [];
   const hasMissing = missingRows.length > 0;
   const isDefaultModel = JSON.stringify([...modelActive].sort()) === JSON.stringify([...modelDefault].sort());
+
   const allTerms = getAllPossibleTerms(factors);
-  // Groupement : effets principaux (ordre 1), quadratiques purs, interactions par ordre
   const byOrder = {};
   allTerms.forEach(t => {
     let key;
@@ -480,71 +375,175 @@ export default function PlanFactoriel() {
     "quad": "Termes quadratiques purs (X²)",
     "2": "Interactions ordre 2",
     "3": "Interactions ordre 3",
-    "4": "Interactions ordre 4"
+    "4": "Interactions ordre 4",
   };
   const orderedKeys = ["1", "quad", "2", "3", "4"].filter(k => byOrder[k]);
 
-  // ─────────────────────────────────────────────────────────────────────────────
-  // RENDU
-  // ─────────────────────────────────────────────────────────────────────────────
+  const diffBadgeCls = {
+    "débutant": "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+    "intermédiaire": "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+    "avancé": "bg-rose-100 text-rose-800 dark:bg-rose-900/40 dark:text-rose-300",
+  };
 
   return (
-    <div style={CSS.app}>
+    <div className="max-w-4xl mx-auto px-4 py-6">
 
-      {/* Stepper */}
-      <div style={CSS.stepper}>
-        {[{ n: 1, l: "Facteurs & réponses" }, { n: 2, l: "Matrice" }, { n: 3, l: "Modèle" }].map((s, i) => (
-          <div key={s.n} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
-            {i > 0 && <div style={CSS.stepSep} />}
-            <div style={CSS.stepItem(part === s.n, part > s.n)} onClick={() => goTo(s.n)}>
-              <div style={CSS.stepNum(part === s.n, part > s.n)}>{part > s.n ? "✓" : s.n}</div>
-              <span style={CSS.stepLabel(part === s.n)}>{s.l}</span>
+      {/* ── BARRE LATÉRALE ── */}
+      {part === 1 && (
+        <Dialog open={sidebarOpen} onClose={setSidebarOpen} className="relative z-50">
+          <DialogBackdrop
+            transition
+            className="fixed inset-0 bg-gray-900/50 transition-opacity duration-300 ease-in-out data-closed:opacity-0"
+          />
+          <div className="fixed inset-0 overflow-hidden">
+            <div className="absolute inset-0 overflow-hidden">
+              <div className="pointer-events-none fixed inset-y-0 left-0 flex max-w-full pr-10">
+                <DialogPanel
+                  transition
+                  className="pointer-events-auto w-72 transform transition duration-300 ease-in-out data-closed:-translate-x-full"
+                >
+                  <div className="flex h-full flex-col bg-white dark:bg-gray-900 shadow-xl overflow-y-auto">
+                    <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
+                      <DialogTitle className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
+                        <BookOpenIcon className="size-4" />
+                        Exemples &amp; nouveau plan
+                      </DialogTitle>
+                      <button onClick={() => setSidebarOpen(false)} className="rounded-md p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                        <XMarkIcon className="size-5" />
+                      </button>
+                    </div>
+
+                    <div className="px-4 pt-4 pb-2">
+                      <button onClick={resetToNew}
+                        className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 hover:border-gray-400 hover:text-gray-800 dark:hover:text-white transition-colors">
+                        <PlusIcon className="size-4" />
+                        Nouveau plan vide
+                      </button>
+                    </div>
+
+                    <div className="px-4 py-3">
+                      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Exemples</p>
+                      <div className="flex flex-col gap-2">
+                        {EXAMPLE_FILES.map((ex) => (
+                          <button key={ex.file} onClick={() => loadExample(ex)}
+                            className={`w-full text-left rounded-lg border px-3 py-2.5 transition-all ${
+                              loadedExampleId === ex.file
+                                ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-400"
+                                : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
+                            }`}>
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                              <span className="text-xs font-medium text-gray-900 dark:text-white leading-tight">{ex.title}</span>
+                              {ex.real_data && (
+                                <span className="shrink-0 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-full px-1.5 py-0.5">réel</span>
+                              )}
+                            </div>
+                            <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">{ex.context}</p>
+                            <span className={`inline-block text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${diffBadgeCls[ex.difficulty] || diffBadgeCls["débutant"]}`}>
+                              {ex.difficulty}
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </DialogPanel>
+              </div>
             </div>
           </div>
-        ))}
-      </div>
+        </Dialog>
+      )}
 
-      {/* ── PARTIE 1 ── */}
+      {/* ── STEPPER ── */}
+      <nav className="flex items-center gap-1 mb-6">
+        {[{ n: 1, l: "Facteurs & réponses" }, { n: 2, l: "Matrice" }, { n: 3, l: "Modèle" }].map((s, i) => (
+          <div key={s.n} className="flex items-center gap-1 shrink-0">
+            {i > 0 && <div className="w-6 h-px bg-gray-200 dark:bg-gray-700 mx-1" />}
+            <button onClick={() => goTo(s.n)}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+              <span className={`size-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${
+                part > s.n ? "bg-emerald-500 text-white" :
+                part === s.n ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" :
+                "border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400"
+              }`}>
+                {part > s.n ? "✓" : s.n}
+              </span>
+              <span className={`text-sm ${part === s.n ? "font-medium text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}`}>
+                {s.l}
+              </span>
+            </button>
+          </div>
+        ))}
+      </nav>
+
+      {/* ══════════════════════════════════════════════════════ PARTIE 1 */}
       {part === 1 && (
         <>
+          <div className="flex items-center justify-between mb-4">
+            <button onClick={() => setSidebarOpen(true)}
+              className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
+              <Bars3Icon className="size-4" />
+              {loadedExampleId
+                ? <span>Exemple chargé : <span className="font-medium">{EXAMPLE_FILES.find(e => e.file === loadedExampleId)?.title}</span></span>
+                : "Charger un exemple / Nouveau plan"}
+            </button>
+          </div>
+
           {/* Facteurs */}
-          <div style={CSS.card}>
-            <div style={CSS.sectionLabel}>Facteurs</div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-4">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Facteurs</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr>
+                  <tr className="border-b border-gray-100 dark:border-gray-800">
                     {["ID", "Nom", "Unité", "Type", "Niveau bas", "Niveau haut", ""].map((h, i) => (
-                      <th key={i} style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary, #666)", padding: "6px 8px", borderBottom: "0.5px solid var(--color-border-secondary, #ccc)", textAlign: "left", whiteSpace: "nowrap" }}>{h}</th>
+                      <th key={i} className="text-left text-[11px] font-medium text-gray-400 dark:text-gray-500 pb-2 px-2 whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {factors.map((f, i) => (
-                    <tr key={f.id}>
-                      <td style={{ padding: "4px 8px" }}><span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary, #666)" }}>{f.id}</span></td>
-                      <td style={{ padding: "4px 6px" }}><input value={f.name} onChange={e => updateFactor(i, "name", e.target.value)} style={{ ...CSS.input, minWidth: 110 }} /></td>
-                      <td style={{ padding: "4px 6px" }}><input value={f.unit || ""} placeholder="°C, g…" onChange={e => updateFactor(i, "unit", e.target.value)} style={{ ...CSS.input, width: 68 }} /></td>
-                      <td style={{ padding: "4px 6px" }}>
-                        <select value={String(f.continuous)} onChange={e => updateFactor(i, "continuous", e.target.value === "true")} style={CSS.select}>
+                    <tr key={f.id} className="border-b border-gray-50 dark:border-gray-800/50 last:border-0">
+                      <td className="px-2 py-1.5">
+                        <span className="font-mono text-xs font-semibold text-gray-400 dark:text-gray-500">{f.id}</span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <input value={f.name} onChange={e => updateFactor(i, "name", e.target.value)}
+                          className="w-28 rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:focus:ring-indigo-400" />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <input value={f.unit || ""} placeholder="°C, g…" onChange={e => updateFactor(i, "unit", e.target.value)}
+                          className="w-16 rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <select value={String(f.continuous)} onChange={e => updateFactor(i, "continuous", e.target.value === "true")}
+                          className="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
                           <option value="true">Continu</option>
                           <option value="false">Discret</option>
                         </select>
                       </td>
-                      <td style={{ padding: "4px 6px" }}>
+                      <td className="px-2 py-1.5">
                         {f.continuous
-                          ? <input type="number" value={f.low.real} onChange={e => updateFactorLevel(i, "low", e.target.value)} style={{ ...CSS.input, minWidth: 70 }} />
-                          : <input value={f.low.label || ""} placeholder="Label −1" onChange={e => updateFactorLabel(i, "low", e.target.value)} style={{ ...CSS.input, minWidth: 90 }} />
+                          ? <input type="number" value={f.low.real} onChange={e => updateFactorLevel(i, "low", e.target.value)}
+                              className="w-20 rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          : <input value={f.low.label || ""} placeholder="Label −1" onChange={e => updateFactorLabel(i, "low", e.target.value)}
+                              className="w-24 rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                         }
                       </td>
-                      <td style={{ padding: "4px 6px" }}>
+                      <td className="px-2 py-1.5">
                         {f.continuous
-                          ? <input type="number" value={f.high.real} onChange={e => updateFactorLevel(i, "high", e.target.value)} style={{ ...CSS.input, minWidth: 70 }} />
-                          : <input value={f.high.label || ""} placeholder="Label +1" onChange={e => updateFactorLabel(i, "high", e.target.value)} style={{ ...CSS.input, minWidth: 90 }} />
+                          ? <input type="number" value={f.high.real} onChange={e => updateFactorLevel(i, "high", e.target.value)}
+                              className="w-20 rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                          : <input value={f.high.label || ""} placeholder="Label +1" onChange={e => updateFactorLabel(i, "high", e.target.value)}
+                              className="w-24 rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
                         }
                       </td>
-                      <td style={{ padding: "4px 6px" }}>
-                        {factors.length > 2 && <button style={CSS.btnDanger} onClick={() => removeFactor(i)}>✕</button>}
+                      <td className="px-2 py-1.5">
+                        {factors.length > 2 && (
+                          <button onClick={() => removeFactor(i)}
+                            className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                            <TrashIcon className="size-4" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -552,180 +551,277 @@ export default function PlanFactoriel() {
               </table>
             </div>
             {factors.length < 6
-              ? <button style={{ ...CSS.btnAdd, marginTop: 10 }} onClick={addFactor}>+ Ajouter un facteur</button>
-              : <p style={{ ...CSS.muted, marginTop: 8 }}>Maximum 6 facteurs atteint.</p>
+              ? <button onClick={addFactor}
+                  className="mt-3 flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 transition-colors">
+                  <PlusIcon className="size-3.5" /> Ajouter un facteur
+                </button>
+              : <p className="mt-3 text-xs text-gray-400">Maximum 6 facteurs atteint.</p>
             }
           </div>
 
           {/* Réponses */}
-          <div style={CSS.card}>
-            <div style={CSS.sectionLabel}>Réponses</div>
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-4">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Réponses</p>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr>
+                  <tr className="border-b border-gray-100 dark:border-gray-800">
                     {["ID", "Nom", "Unité", ""].map((h, i) => (
-                      <th key={i} style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary, #666)", padding: "6px 8px", borderBottom: "0.5px solid var(--color-border-secondary, #ccc)", textAlign: "left" }}>{h}</th>
+                      <th key={i} className="text-left text-[11px] font-medium text-gray-400 dark:text-gray-500 pb-2 px-2">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {responses.map((r, i) => (
-                    <tr key={r.id}>
-                      <td style={{ padding: "4px 8px" }}><span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 13, fontWeight: 500, color: "var(--color-text-secondary, #666)" }}>{r.id}</span></td>
-                      <td style={{ padding: "4px 6px" }}><input value={r.name} onChange={e => updateResponse(i, "name", e.target.value)} style={{ ...CSS.input, minWidth: 130 }} /></td>
-                      <td style={{ padding: "4px 6px" }}><input value={r.unit || ""} placeholder="%, nm…" onChange={e => updateResponse(i, "unit", e.target.value)} style={{ ...CSS.input, width: 80 }} /></td>
-                      <td style={{ padding: "4px 6px" }}>
-                        {responses.length > 1 && <button style={CSS.btnDanger} onClick={() => removeResponse(i)}>✕</button>}
+                    <tr key={r.id} className="border-b border-gray-50 dark:border-gray-800/50 last:border-0">
+                      <td className="px-2 py-1.5">
+                        <span className="font-mono text-xs font-semibold text-gray-400 dark:text-gray-500">{r.id}</span>
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <input value={r.name} onChange={e => updateResponse(i, "name", e.target.value)}
+                          className="w-36 rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        <input value={r.unit || ""} placeholder="%, nm…" onChange={e => updateResponse(i, "unit", e.target.value)}
+                          className="w-20 rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                      </td>
+                      <td className="px-2 py-1.5">
+                        {responses.length > 1 && (
+                          <button onClick={() => removeResponse(i)}
+                            className="p-1 rounded text-red-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                            <TrashIcon className="size-4" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <button style={{ ...CSS.btnAdd, marginTop: 10 }} onClick={addResponse}>+ Ajouter une réponse</button>
+            <button onClick={addResponse}
+              className="mt-3 flex items-center gap-1.5 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 border border-dashed border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 transition-colors">
+              <PlusIcon className="size-3.5" /> Ajouter une réponse
+            </button>
           </div>
 
           {/* Point central */}
-          <div style={CSS.card}>
-            <div style={CSS.sectionLabel}>Point central</div>
-            <div style={CSS.row}>
-              <label style={{ ...CSS.row, cursor: "pointer", gap: 6 }}>
-                <input type="checkbox" checked={centerPoint.present} onChange={e => setCenterPoint({ ...centerPoint, present: e.target.checked })} />
-                <span style={{ fontSize: 13 }}>Inclure un point central</span>
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-4">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Point central</p>
+            <div className="flex items-center gap-4">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={centerPoint.present}
+                  onChange={e => setCenterPoint({ ...centerPoint, present: e.target.checked })}
+                  className="size-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                <span className="text-sm text-gray-700 dark:text-gray-200">Inclure un point central</span>
               </label>
               {centerPoint.present && (
-                <>
-                  <span style={{ ...CSS.muted, marginLeft: 8 }}>Répétitions :</span>
-                  <input type="number" min={1} max={10} value={centerPoint.replicates} onChange={e => setCenterPoint({ ...centerPoint, replicates: Math.max(1, +e.target.value) })} style={{ ...CSS.input, width: 60 }} />
-                </>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400">Répétitions :</span>
+                  <input type="number" min={1} max={10} value={centerPoint.replicates}
+                    onChange={e => setCenterPoint({ ...centerPoint, replicates: Math.max(1, +e.target.value) })}
+                    className="w-16 rounded-md border border-gray-200 dark:border-gray-700 bg-transparent px-2 py-1 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+                </div>
               )}
             </div>
           </div>
 
-          <div style={CSS.sectionNav}>
-            <div style={{ fontSize: 12, color: "var(--color-text-secondary, #666)" }}>
-              Plan 2<sup>{factors.length}</sup> = <strong>{1 << factors.length}</strong> essai(s)
+          <div className="flex items-center justify-between mt-5">
+            <p className="text-xs text-gray-400 dark:text-gray-500">
+              Plan 2<sup>{factors.length}</sup> = <strong className="text-gray-600 dark:text-gray-300">{1 << factors.length}</strong> essai(s)
               {centerPoint.present ? ` + ${centerPoint.replicates} point(s) central` : ""}
-            </div>
-            <button style={CSS.btnPrimary} onClick={buildMatrix}>Construire la table de données →</button>
+            </p>
+            <button onClick={buildMatrix}
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 transition-colors shadow-sm">
+              Construire la table de données →
+            </button>
           </div>
         </>
       )}
 
-      {/* ── PARTIE 2 ── */}
+      {/* ══════════════════════════════════════════════════════ PARTIE 2 */}
       {part === 2 && matrix && (
         <>
-          <div style={CSS.card}>
-            {/* Popup ajout ligne */}
-            {addRowLevels && (
-              <div style={CSS.overlayWrap}>
-                <div style={CSS.popupBox}>
-                  <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 12 }}>Nouvelle ligne — choisir les niveaux</div>
-                  {factors.map(f => {
-                    const sel = addRowLevels[f.id];
-                    return (
-                      <div key={f.id} style={{ marginBottom: 10 }}>
-                        <div style={{ fontSize: 12, color: "var(--color-text-secondary, #666)", marginBottom: 4 }}>{f.id} — {f.name}</div>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button style={CSS.levelBtn(sel === -1 ? "neg" : "")} onClick={() => setAddRowLevels({ ...addRowLevels, [f.id]: -1 })}>
-                            −1{f.continuous ? ` (${f.low.real}${f.unit ? " " + f.unit : ""})` : (f.low.label ? " " + f.low.label : "")}
+          {/* Dialog ajout ligne */}
+          <Dialog open={addRowLevels !== null} onClose={() => setAddRowLevels(null)} className="relative z-50">
+            <DialogBackdrop transition className="fixed inset-0 bg-gray-900/50 transition-opacity data-closed:opacity-0" />
+            <div className="fixed inset-0 z-10 flex items-center justify-center p-4">
+              <DialogPanel transition className="w-full max-w-sm rounded-xl bg-white dark:bg-gray-900 p-6 shadow-xl transition-all data-closed:opacity-0 data-closed:scale-95">
+                <DialogTitle className="text-sm font-semibold text-gray-900 dark:text-white mb-4">
+                  Nouvelle ligne — choisir les niveaux
+                </DialogTitle>
+                {addRowLevels && factors.map(f => {
+                  const sel = addRowLevels[f.id];
+                  return (
+                    <div key={f.id} className="mb-3">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 mb-1.5">{f.id} — {f.name}</p>
+                      <div className="flex gap-2">
+                        <button onClick={() => setAddRowLevels({ ...addRowLevels, [f.id]: -1 })}
+                          className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-mono font-medium transition-colors ${sel === -1 ? "bg-red-50 border-red-300 text-red-700 dark:bg-red-900/30 dark:border-red-500 dark:text-red-300" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300"}`}>
+                          −1{f.continuous ? ` (${f.low.real}${f.unit ? " " + f.unit : ""})` : (f.low.label ? " " + f.low.label : "")}
+                        </button>
+                        {f.continuous && (
+                          <button onClick={() => setAddRowLevels({ ...addRowLevels, [f.id]: 0 })}
+                            className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-mono font-medium transition-colors ${sel === 0 ? "bg-amber-50 border-amber-300 text-amber-700 dark:bg-amber-900/30 dark:border-amber-500 dark:text-amber-300" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300"}`}>
+                            0 ({+((f.low.real + f.high.real) / 2).toFixed(2)}{f.unit ? " " + f.unit : ""})
                           </button>
-                          {f.continuous && (
-                            <button style={CSS.levelBtn(sel === 0 ? "zero" : "")} onClick={() => setAddRowLevels({ ...addRowLevels, [f.id]: 0 })}>
-                              0 ({+((f.low.real + f.high.real) / 2).toFixed(2)}{f.unit ? " " + f.unit : ""})
-                            </button>
-                          )}
-                          <button style={CSS.levelBtn(sel === 1 ? "pos" : "")} onClick={() => setAddRowLevels({ ...addRowLevels, [f.id]: 1 })}>
-                            +1{f.continuous ? ` (${f.high.real}${f.unit ? " " + f.unit : ""})` : (f.high.label ? " " + f.high.label : "")}
-                          </button>
-                        </div>
+                        )}
+                        <button onClick={() => setAddRowLevels({ ...addRowLevels, [f.id]: 1 })}
+                          className={`flex-1 rounded-lg border px-2 py-1.5 text-xs font-mono font-medium transition-colors ${sel === 1 ? "bg-emerald-50 border-emerald-300 text-emerald-700 dark:bg-emerald-900/30 dark:border-emerald-500 dark:text-emerald-300" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-400 hover:border-gray-300"}`}>
+                          +1{f.continuous ? ` (${f.high.real}${f.unit ? " " + f.unit : ""})` : (f.high.label ? " " + f.high.label : "")}
+                        </button>
                       </div>
-                    );
-                  })}
-                  <div style={{ ...CSS.row, justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
-                    <button style={CSS.btnSmall} onClick={() => setAddRowLevels(null)}>Annuler</button>
-                    <button style={CSS.btnPrimary} onClick={confirmAddRow}>Ajouter</button>
-                  </div>
+                    </div>
+                  );
+                })}
+                <div className="flex justify-end gap-2 mt-5">
+                  <button onClick={() => setAddRowLevels(null)}
+                    className="rounded-md bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 px-3 py-1.5 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    Annuler
+                  </button>
+                  <button onClick={confirmAddRow}
+                    className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">
+                    Ajouter
+                  </button>
                 </div>
-              </div>
-            )}
+              </DialogPanel>
+            </div>
+          </Dialog>
 
-            <div style={{ ...CSS.row, justifyContent: "space-between", marginBottom: 10 }}>
-              <div style={CSS.sectionLabel}>Matrice d'expériences</div>
-              <div style={{ ...CSS.row, gap: 8 }}>
-                <span style={CSS.muted}>{matrix.length} essai(s)</span>
-                <button style={CSS.btnSmall} onClick={openAddRow}>+ Ligne</button>
+          {/* Dialog confirmation remplissage aléatoire */}
+          <Dialog open={showRandomDialog} onClose={setShowRandomDialog} className="relative z-50">
+            <DialogBackdrop transition className="fixed inset-0 bg-gray-900/50 transition-opacity data-closed:opacity-0" />
+            <div className="fixed inset-0 z-10 flex items-center justify-center p-4">
+              <DialogPanel transition className="w-full max-w-md rounded-xl bg-white dark:bg-gray-900 p-6 shadow-xl transition-all data-closed:opacity-0 data-closed:scale-95">
+                <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+                  <ExclamationTriangleIcon className="size-6 text-amber-600 dark:text-amber-400" />
+                </div>
+                <DialogTitle className="text-center text-base font-semibold text-gray-900 dark:text-white mb-2">
+                  Remplir avec des valeurs aléatoires ?
+                </DialogTitle>
+                <p className="text-center text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  Des valeurs fictives (entre 20 et 100) seront générées pour toutes les réponses manquantes.
+                </p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button onClick={() => setShowRandomDialog(false)}
+                    className="rounded-md bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors">
+                    Annuler
+                  </button>
+                  <button onClick={fillRandom}
+                    className="rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">
+                    Confirmer
+                  </button>
+                </div>
+              </DialogPanel>
+            </div>
+          </Dialog>
+
+          {/* Dialog remplissage effectué */}
+          <Dialog open={showRandomDone} onClose={setShowRandomDone} className="relative z-50">
+            <DialogBackdrop transition className="fixed inset-0 bg-gray-900/50 transition-opacity data-closed:opacity-0" />
+            <div className="fixed inset-0 z-10 flex items-center justify-center p-4">
+              <DialogPanel transition className="w-full max-w-sm rounded-xl bg-white dark:bg-gray-900 p-6 shadow-xl text-center transition-all data-closed:opacity-0 data-closed:scale-95">
+                <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                  <CheckIcon className="size-6 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <DialogTitle className="text-base font-semibold text-gray-900 dark:text-white mb-2">Valeurs générées</DialogTitle>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  Les réponses manquantes ont été remplies avec des valeurs aléatoires fictives.
+                </p>
+                <button onClick={() => setShowRandomDone(false)}
+                  className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">
+                  OK
+                </button>
+              </DialogPanel>
+            </div>
+          </Dialog>
+
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Matrice d'expériences</p>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400">{matrix.length} essai(s)</span>
+                <button onClick={openAddRow}
+                  className="flex items-center gap-1 rounded-md border border-gray-200 dark:border-gray-700 px-2.5 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                  <PlusIcon className="size-3.5" /> Ligne
+                </button>
               </div>
             </div>
 
             {hasMissing && (
-              <div style={CSS.alertWarn}>
-                <span>{missingRows.length} ligne(s) sans réponse complète.</span>
-                <button style={CSS.btnWarn} onClick={() => { if (window.confirm("Remplir les réponses manquantes avec des valeurs aléatoires (20–100) ? Ces valeurs sont fictives.")) fillRandom(); }}>
+              <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2 mb-4 gap-3">
+                <span className="text-xs text-amber-700 dark:text-amber-300">{missingRows.length} ligne(s) sans réponse complète.</span>
+                <button onClick={() => setShowRandomDialog(true)}
+                  className="shrink-0 rounded-md bg-amber-100 dark:bg-amber-900/40 border border-amber-300 dark:border-amber-600 px-2.5 py-1 text-xs font-medium text-amber-700 dark:text-amber-300 hover:bg-amber-200 transition-colors">
                   Remplir valeurs aléatoires…
                 </button>
               </div>
             )}
 
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
                 <thead>
-                  <tr>
-                    <th style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary, #666)", padding: "6px 8px", borderBottom: "0.5px solid var(--color-border-secondary, #ccc)", width: 32 }}>#</th>
+                  <tr className="border-b border-gray-100 dark:border-gray-800">
+                    <th className="text-[11px] font-medium text-gray-400 pb-2 px-2 w-8 text-center">#</th>
                     {factors.map(f => (
-                      <th key={f.id} style={{ fontSize: 11, fontWeight: 500, color: "var(--color-text-secondary, #666)", padding: "6px 8px", borderBottom: "0.5px solid var(--color-border-secondary, #ccc)", textAlign: "left" }}>
-                        {f.id}<br /><span style={CSS.muted}>{f.name}{f.unit ? ` (${f.unit})` : ""}</span>
+                      <th key={f.id} className="text-left text-[11px] font-medium text-gray-400 pb-2 px-2 whitespace-nowrap">
+                        {f.id}<br />
+                        <span className="text-[10px] font-normal text-gray-300 dark:text-gray-600">{f.name}{f.unit ? ` (${f.unit})` : ""}</span>
                       </th>
                     ))}
-                    <th style={{ width: 2, background: "var(--color-border-tertiary, #e5e5e5)", padding: 0 }} />
+                    <th className="w-px bg-gray-100 dark:bg-gray-800 p-0" />
                     {responses.map(r => (
-                      <th key={r.id} style={{ fontSize: 11, fontWeight: 500, color: "#0F6E56", padding: "6px 8px", borderBottom: "0.5px solid var(--color-border-secondary, #ccc)", textAlign: "left" }}>
-                        {r.id}<br /><span style={{ ...CSS.muted, color: "#1D9E75" }}>{r.name}{r.unit ? ` (${r.unit})` : ""}</span>
+                      <th key={r.id} className="text-left text-[11px] font-medium text-emerald-600 dark:text-emerald-400 pb-2 px-2 whitespace-nowrap">
+                        {r.id}<br />
+                        <span className="text-[10px] font-normal text-emerald-400 dark:text-emerald-600">{r.name}{r.unit ? ` (${r.unit})` : ""}</span>
                       </th>
                     ))}
-                    <th style={{ width: 32 }} />
+                    <th className="w-8" />
                   </tr>
                 </thead>
                 <tbody>
                   {matrix.map((row, ri) => {
                     const isMissing = missingRows.includes(ri);
                     return (
-                      <tr key={ri} style={{ background: row.center ? "#FAEEDA22" : isMissing ? "#FCEBEB22" : "transparent" }}>
-                        <td style={{ padding: "4px 8px", textAlign: "center", fontSize: 11, color: "var(--color-text-secondary, #666)" }}>
-                          {row.center ? "PC" : ri + 1}
-                        </td>
+                      <tr key={ri} className={`border-b border-gray-50 dark:border-gray-800/50 last:border-0 ${row.center ? "bg-amber-50/40 dark:bg-amber-900/10" : isMissing ? "bg-red-50/40 dark:bg-red-900/10" : ""}`}>
+                        <td className="px-2 py-1.5 text-center text-[11px] text-gray-400">{row.center ? "PC" : ri + 1}</td>
                         {factors.map(f => {
                           const c = row.coded[f.id];
                           const rv = row.real[f.id];
                           const cLabel = c === 0 ? "0" : c === -1 ? "−1" : "+1";
-                          const cColor = c === -1 ? "#993C1D" : c === 1 ? "#0F6E56" : "#854F0B";
-                          if (row.center && !f.continuous) return <td key={f.id} style={{ padding: "4px 6px", textAlign: "center", color: "var(--color-text-secondary, #666)", fontSize: 11 }}>—</td>;
+                          const cCls = c === -1 ? "text-red-500 dark:text-red-400" : c === 1 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-500";
+                          if (row.center && !f.continuous) return (
+                            <td key={f.id} className="px-2 py-1.5 text-center text-xs text-gray-300 dark:text-gray-600">—</td>
+                          );
                           return (
-                            <td key={f.id} style={{ padding: "4px 6px" }}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                                <span style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 11, color: cColor, minWidth: 28 }}>({cLabel})</span>
+                            <td key={f.id} className="px-2 py-1.5">
+                              <div className="flex items-center gap-1">
+                                <span className={`font-mono text-[10px] w-6 shrink-0 ${cCls}`}>({cLabel})</span>
                                 {f.continuous
-                                  ? <input type="number" value={rv} onChange={e => updateCell(ri, f.id, e.target.value)} style={{ ...CSS.input, minWidth: 54, height: 28, padding: "3px 6px", border: "0.5px solid transparent", background: "transparent" }} />
-                                  : <span style={{ fontSize: 12, color: "var(--color-text-secondary, #666)" }}>{rv ?? "—"}</span>
+                                  ? <input type="number" value={rv} onChange={e => updateCell(ri, f.id, e.target.value)}
+                                      className="w-14 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-gray-700 dark:text-gray-200 hover:border-gray-200 dark:hover:border-gray-700 focus:outline-none focus:border-indigo-400 transition-colors" />
+                                  : <span className="text-xs text-gray-500 dark:text-gray-400">{rv ?? "—"}</span>
                                 }
                               </div>
                             </td>
                           );
                         })}
-                        <td style={{ width: 2, background: "var(--color-border-tertiary, #e5e5e5)", padding: 0 }} />
+                        <td className="w-px bg-gray-100 dark:bg-gray-800 p-0" />
                         {responses.map(r => {
                           const v = row.responses[r.id];
                           const isEmpty = v === "" || v === null || v === undefined;
                           return (
-                            <td key={r.id} style={{ padding: "4px 6px" }}>
-                              <input type="number" value={isEmpty ? "" : v} placeholder="—" onChange={e => updateResp(ri, r.id, e.target.value)}
-                                style={{ ...CSS.input, minWidth: 70, height: 28, padding: "3px 6px", color: "#0F6E56", borderColor: isEmpty ? "#F09595" : "transparent", background: "transparent" }} />
+                            <td key={r.id} className="px-2 py-1.5">
+                              <input type="number" value={isEmpty ? "" : v} placeholder="—"
+                                onChange={e => updateResp(ri, r.id, e.target.value)}
+                                className={`w-16 rounded border bg-transparent px-1 py-0.5 text-xs text-emerald-700 dark:text-emerald-300 hover:border-gray-200 dark:hover:border-gray-700 focus:outline-none focus:border-indigo-400 transition-colors ${isEmpty ? "border-red-300 dark:border-red-700" : "border-transparent"}`} />
                             </td>
                           );
                         })}
-                        <td style={{ padding: "4px 6px" }}>
-                          <button style={CSS.btnDanger} onClick={() => removeRun(ri)}>✕</button>
+                        <td className="px-2 py-1.5">
+                          <button onClick={() => removeRun(ri)}
+                            className="p-1 rounded text-red-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors">
+                            <TrashIcon className="size-3.5" />
+                          </button>
                         </td>
                       </tr>
                     );
@@ -735,12 +831,15 @@ export default function PlanFactoriel() {
             </div>
           </div>
 
-          <div style={CSS.sectionNav}>
-            <button style={CSS.btn} onClick={() => goTo(1)}>← Retour</button>
-            <div style={{ ...CSS.row, gap: 10 }}>
-              {hasMissing && <span style={{ ...CSS.muted, color: "#A32D2D" }}>Compléter les réponses pour continuer</span>}
-              <button style={{ ...CSS.btnPrimary, opacity: hasMissing ? 0.35 : 1, cursor: hasMissing ? "not-allowed" : "pointer" }}
-                onClick={() => { if (!hasMissing) goTo(3); }}>
+          <div className="flex items-center justify-between mt-4">
+            <button onClick={() => goTo(1)}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              ← Retour
+            </button>
+            <div className="flex items-center gap-3">
+              {hasMissing && <span className="text-xs text-red-500 dark:text-red-400">Compléter les réponses pour continuer</span>}
+              <button onClick={() => { if (!hasMissing) goTo(3); }} disabled={hasMissing}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
                 Choisir le modèle →
               </button>
             </div>
@@ -748,84 +847,121 @@ export default function PlanFactoriel() {
         </>
       )}
 
-      {/* ── PARTIE 3 ── */}
+      {/* ══════════════════════════════════════════════════════ PARTIE 3 */}
       {part === 3 && (
         <>
-          {/* Popup cubique impossible */}
-          {showCubicPopup && (
-            <div style={{ background: "rgba(0,0,0,0.35)", borderRadius: "var(--border-radius-lg, 12px)", padding: "2rem", marginBottom: "1rem", display: "flex", alignItems: "center", justifyContent: "center", minHeight: 120 }}>
-              <div style={CSS.popupBox}>
-                <div style={{ fontWeight: 500, fontSize: 14, marginBottom: 8 }}>Modèle impossible</div>
-                <div style={{ fontSize: 13, color: "var(--color-text-secondary, #666)", marginBottom: 14 }}>
-                  Le modèle cubique (ordre 3) nécessite au moins 3 facteurs.
+          {/* Dialog cubique impossible */}
+          <Dialog open={showCubicDialog} onClose={setShowCubicDialog} className="relative z-50">
+            <DialogBackdrop transition className="fixed inset-0 bg-gray-900/50 transition-opacity data-closed:opacity-0" />
+            <div className="fixed inset-0 z-10 flex items-center justify-center p-4">
+              <DialogPanel transition className="w-full max-w-sm rounded-xl bg-white dark:bg-gray-900 p-6 shadow-xl text-center transition-all data-closed:opacity-0 data-closed:scale-95">
+                <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                  <ExclamationTriangleIcon className="size-6 text-red-600 dark:text-red-400" />
                 </div>
-                <button style={CSS.btnSmall} onClick={() => setShowCubicPopup(false)}>Fermer</button>
-              </div>
+                <DialogTitle className="text-base font-semibold text-gray-900 dark:text-white mb-2">Modèle impossible</DialogTitle>
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
+                  Le modèle cubique (ordre 3) nécessite au moins 3 facteurs.
+                </p>
+                <button onClick={() => setShowCubicDialog(false)}
+                  className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">
+                  Fermer
+                </button>
+              </DialogPanel>
             </div>
-          )}
+          </Dialog>
 
-          <div style={CSS.card}>
-            <div style={{ ...CSS.row, justifyContent: "space-between", marginBottom: 12 }}>
-              <div style={CSS.sectionLabel}>Modèle de régression</div>
-              {!isDefaultModel && <button style={CSS.btnSmall} onClick={resetModel}>↺ Revenir au défaut JSON</button>}
+          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-4">
+            <div className="flex items-center justify-between mb-4">
+              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Modèle de régression</p>
+              {!isDefaultModel && (
+                <button onClick={resetModel}
+                  className="flex items-center gap-1.5 rounded-md border border-gray-200 dark:border-gray-700 px-2.5 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                  <ArrowPathIcon className="size-3.5" /> Défaut JSON
+                </button>
+              )}
             </div>
 
-            <div style={{ ...CSS.row, gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-              {["linear", "synergie", "quadratic", "cubic", "default"].map(p => (
-                <button key={p} style={CSS.presetBtn(modelPreset === p)} onClick={() => applyPreset(p)}>
-                  {{ linear: "Linéaire (ordre 1)", synergie: "Synergie (ordre 1+2)", quadratic: "Quadratique (ordre 2)", cubic: "Cubique (ordre 3)", default: "Défaut (JSON)" }[p]}
+            <div className="flex flex-wrap gap-2 mb-4">
+              {[
+                { id: "linear", label: "Linéaire (ordre 1)" },
+                { id: "synergie", label: "Synergie (ordre 1+2)" },
+                { id: "quadratic", label: "Quadratique (ordre 2)" },
+                { id: "cubic", label: "Cubique (ordre 3)" },
+                { id: "default", label: "Défaut (JSON)" },
+              ].map(p => (
+                <button key={p.id} onClick={() => applyPreset(p.id)}
+                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    modelPreset === p.id
+                      ? "bg-indigo-600 border-indigo-600 text-white"
+                      : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
+                  }`}>
+                  {p.label}
                 </button>
               ))}
             </div>
 
-            <div style={CSS.divider} />
+            <div className="h-px bg-gray-100 dark:bg-gray-800 mb-4" />
 
-            <div style={{ marginBottom: 4 }}>
-              <span style={CSS.modelTermConst}>α₀</span>
-              <span style={{ ...CSS.muted, marginLeft: 4 }}>constante — toujours incluse</span>
+            <div className="mb-3">
+              <span className="inline-flex items-center rounded-full bg-purple-100 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 px-3 py-1 text-xs font-mono font-semibold text-purple-700 dark:text-purple-300 mr-2">α₀</span>
+              <span className="text-xs text-gray-400">constante — toujours incluse</span>
             </div>
 
             {orderedKeys.map(order => (
-              <div key={order} style={{ marginTop: 12 }}>
-                <div style={{ ...CSS.muted, marginBottom: 5 }}>{orderLabels[order] || "Ordre " + order}</div>
-                <div>
+              <div key={order} className="mb-3">
+                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">{orderLabels[order]}</p>
+                <div className="flex flex-wrap gap-1.5">
                   {byOrder[order].map(t => {
                     const isOn = modelActive.includes(t);
                     return (
-                      <span key={t} style={isOn ? CSS.modelTermOn : CSS.modelTermOff} onClick={() => toggleTerm(t)} title={modelDefault.includes(t) ? "Présent dans le modèle par défaut" : ""}>
+                      <button key={t} onClick={() => toggleTerm(t)}
+                        title={modelDefault.includes(t) ? "Présent dans le modèle par défaut" : ""}
+                        className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-mono font-medium transition-all ${
+                          isOn
+                            ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-600 text-emerald-700 dark:text-emerald-300"
+                            : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 opacity-50 line-through"
+                        }`}>
                         {formatTermDisplay(t, factors)}
-                      </span>
+                      </button>
                     );
                   })}
                 </div>
               </div>
             ))}
 
-            <div style={CSS.divider} />
-            <div style={{ ...CSS.row, gap: 8, flexWrap: "wrap", marginTop: 4 }}>
-              <span style={CSS.muted}>Termes actifs :</span>
-              <strong style={{ fontSize: 13 }}>{modelActive.length + 1}</strong>
-              <span style={CSS.muted}>(+ constante)</span>
+            <div className="h-px bg-gray-100 dark:bg-gray-800 mt-4 mb-3" />
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs text-gray-400">Termes actifs :</span>
+              <strong className="text-sm text-gray-700 dark:text-gray-200">{modelActive.length + 1}</strong>
+              <span className="text-xs text-gray-400">(+ constante)</span>
               {!isDefaultModel
-                ? <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 500, background: "#FAEEDA", color: "#633806" }}>Modifié</span>
-                : <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 20, fontSize: 11, fontWeight: 500, background: "#E1F5EE", color: "#085041" }}>Défaut JSON</span>
+                ? <span className="rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">Modifié</span>
+                : <span className="rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">Défaut JSON</span>
               }
             </div>
           </div>
 
           {/* Équation */}
-          <div style={{ ...CSS.card, background: "var(--color-background-secondary, #f5f5f5)" }}>
-            <div style={CSS.sectionLabel}>Équation</div>
-            <div style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 13, color: "var(--color-text-primary, #111)", lineHeight: 2.2 }}>
-              Ŷ = α₀{modelActive.map(t => (
-                <span key={t}> + α<sub>{termSubScript(t, factors)}</sub>·<span dangerouslySetInnerHTML={{ __html: formatTermHTML(t, factors) }} /></span>
+          <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-4">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Équation</p>
+            <div className="font-mono text-sm text-gray-700 dark:text-gray-200 leading-loose">
+              <span>Ŷ = α₀</span>
+              {modelActive.map(t => (
+                <span key={t}>
+                  {" "}+ α<sub>{termSubScript(t, factors)}</sub>·<span dangerouslySetInnerHTML={{ __html: formatTermHTML(t, factors) }} />
+                </span>
               ))}
             </div>
           </div>
 
-          <div style={CSS.sectionNav}>
-            <button style={CSS.btn} onClick={() => goTo(2)}>← Retour</button>
-            <button style={CSS.btnPrimary}>Continuer →</button>
+          <div className="flex items-center justify-between mt-4">
+            <button onClick={() => goTo(2)}
+              className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+              ← Retour
+            </button>
+            <button className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">
+              Continuer →
+            </button>
           </div>
         </>
       )}
