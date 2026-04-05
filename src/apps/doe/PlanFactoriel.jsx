@@ -243,6 +243,7 @@ export default function PlanFactoriel() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loadedExampleId, setLoadedExampleId] = useState(null);
   const [loadError, setLoadError] = useState(null);
+  const [importError, setImportError] = useState(null);
   const [editMode, setEditMode] = useState(false);
   const [editMeta, setEditMeta] = useState({ id: "", title: "", context: "", difficulty: "débutant", real_data: false, source: "" });
 
@@ -316,6 +317,67 @@ export default function PlanFactoriel() {
     }
   };
 
+  const validateAndImport = (file) => {
+    setImportError(null);
+    if (!file) return;
+    if (!file.name.endsWith(".json")) {
+      setImportError("Le fichier doit être un fichier .json");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = JSON.parse(e.target.result);
+        // Validation du format
+        const errors = [];
+        if (!data.meta || typeof data.meta !== "object") errors.push("Champ 'meta' manquant ou invalide");
+        if (!Array.isArray(data.factors) || data.factors.length < 2) errors.push("'factors' doit être un tableau d'au moins 2 facteurs");
+        if (!Array.isArray(data.responses) || data.responses.length < 1) errors.push("'responses' doit contenir au moins une réponse");
+        if (!Array.isArray(data.model_default)) errors.push("'model_default' doit être un tableau");
+        if (!Array.isArray(data.runs)) errors.push("'runs' doit être un tableau");
+        if (data.factors) {
+          data.factors.forEach((f, i) => {
+            if (!f.id) errors.push(`Facteur ${i+1} : 'id' manquant`);
+            if (!f.name) errors.push(`Facteur ${i+1} : 'name' manquant`);
+            if (f.continuous === undefined) errors.push(`Facteur ${i+1} : 'continuous' manquant`);
+            if (f.continuous && (f.low?.real === undefined || f.high?.real === undefined))
+              errors.push(`Facteur ${i+1} : 'low.real' ou 'high.real' manquant`);
+            if (!f.continuous && (f.low?.label === undefined || f.high?.label === undefined))
+              errors.push(`Facteur ${i+1} : 'low.label' ou 'high.label' manquant`);
+          });
+        }
+        if (errors.length > 0) {
+          setImportError(errors.join(" · "));
+          return;
+        }
+        // Import valide
+        const { factors: f, responses: r, centerPoint: cp, modelDefault: md, matrix: m } = loadExampleData(data);
+        setFactors(f);
+        setResponses(r);
+        setCenterPoint(cp);
+        setModelDefault(md);
+        setModelActive([...md]);
+        setModelPreset("default");
+        setMatrix(m);
+        setLoadedExampleId(file.name);
+        setEditMeta({
+          id: data.meta?.id || file.name.replace(".json", ""),
+          title: data.meta?.title || "",
+          context: data.meta?.context || "",
+          difficulty: data.meta?.difficulty || "débutant",
+          real_data: data.meta?.real_data ?? false,
+          source: data.meta?.source || "",
+        });
+        setEditMode(true);
+        setSidebarOpen(false);
+        setPart(1);
+      } catch (err) {
+        setImportError("JSON invalide : " + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const exportJSON = () => {
     // Reconstruit les runs depuis la matrice courante
     // Regroupe les lignes qui partagent les mêmes niveaux codés (réplicats)
@@ -359,6 +421,7 @@ export default function PlanFactoriel() {
     a.download = `${editMeta.id || "plan"}.json`;
     a.click();
     URL.revokeObjectURL(url);
+    setEditMode(false);
   };
 
   const goTo = (n) => {
@@ -536,6 +599,28 @@ export default function PlanFactoriel() {
                       <button onClick={() => setSidebarOpen(false)} className="rounded-md p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
                         <XMarkIcon className="size-5" />
                       </button>
+                    </div>
+
+                    {/* Import JSON */}
+                    <div className="px-4 pt-4 pb-0">
+                      <label className="w-full flex items-center justify-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer">
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-4 rotate-180">
+                          <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V12a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 1.414L10 16.414l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        Importer un JSON
+                        <input
+                          type="file"
+                          accept=".json"
+                          className="sr-only"
+                          onChange={e => { validateAndImport(e.target.files[0]); e.target.value = ""; }}
+                        />
+                      </label>
+                      {importError && (
+                        <div className="mt-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 px-3 py-2">
+                          <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-0.5">Format invalide</p>
+                          <p className="text-[11px] text-red-500 dark:text-red-400 leading-relaxed">{importError}</p>
+                        </div>
+                      )}
                     </div>
 
                     <div className="px-4 pt-4 pb-2">
