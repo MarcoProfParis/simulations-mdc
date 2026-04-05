@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useTheme } from "../../ThemeContext";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
+import { EXAMPLE_FILES } from "./exampleFiles";
 
 function classNames(...classes) {
   return classes.filter(Boolean).join(" ");
@@ -125,16 +126,7 @@ function calcStatsWithReps(ts, C, rawObs) {
   return { resids, yhat, R2, R2adj, F: Fstat, pF, dfR, dfE, rawObs: true };
 }
 
-// ── fichiers de données exemples ──────────────────────────────────────────────
-const EXAMPLE_FILES = [
-  { file: "ex_extraction.json",     title: "Extraction d'un principe actif",          context: "2 facteurs · Rendement d'extraction" },
-  { file: "ex_ester.json",          title: "Synthèse d'un ester",                     context: "2 facteurs · Taux de conversion" },
-  { file: "ex_catalyse.json",       title: "Optimisation d'une réaction catalytique", context: "3 facteurs · Rendement" },
-  { file: "ex_revetement.json",     title: "Formulation d'un revêtement",             context: "4 facteurs · Viscosité" },
-  { file: "ex_saponification.json", title: "Saponification — données réelles",        context: "4 facteurs · Rendement (%)",      real: true },
-  { file: "ex_nanoparticules.json", title: "Formulation nanoparticules",              context: "4 facteurs · Taille moyenne (nm)", real: true },
-  { file: "ex_nanoparticules2.json", title: "Formulation nanoparticules2",              context: "4 facteurs · Taille moyenne (nm)", real: true },
-];
+
 
 
 
