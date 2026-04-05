@@ -1075,6 +1075,170 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
       return sg + av + xp;
     }).join("");
 
+  // ── Tableau comparaison des modèles (dans onglet remodel) ────────────────────
+  // Calcule les stats pour chaque modèle avec les termes actuellement actifs
+  // Le modèle remodélisé = termes actifs, les 3 standards = leurs termes propres
+  const modelCompareRows = [
+    {
+      id: "lin",
+      lb: "Modèle linéaire",
+      col: T.green, bg: T.greenBg,
+      ts: all.filter(t => t.o <= 1),
+    },
+    {
+      id: "quad",
+      lb: "Modèle quadratique",
+      col: T.purple, bg: T.purpleBg,
+      ts: all.filter(t => t.o <= 2),
+    },
+    ...(n >= 3 ? [{
+      id: "cub",
+      lb: "Modèle cubique",
+      col: T.red, bg: T.redBg,
+      ts: all.filter(t => t.o <= 99),
+    }] : []),
+  ].map(m => {
+    // Pour chaque modèle standard, on filtre avec les termes exclus
+    const ts = [all[0], ...m.ts.filter(t => t.o >= 1 && !excludedTerms.has(t.lb))];
+    const Cm = fitModel(ts, ys, n);
+    const st = rawObs ? calcStatsWithReps(ts, Cm, rawObs) : calcStats(ts, Cm, ys, n);
+    return { ...m, ts, nbCoeff: ts.length, ...st };
+  });
+
+  // Trouver le meilleur R²adj parmi les 3 modèles pour le surlignage
+  const bestCompareIdx = modelCompareRows.reduce((bi, m, i) =>
+    m.R2adj > modelCompareRows[bi].R2adj ? i : bi, 0);
+
+  const ModelCompareTable = () => {
+    const rowDefs = [
+      {
+        key: "nbCoeff",
+        label: "Nb coefficients",
+        fmt: (s) => s.nbCoeff,
+        color: () => "var(--text)",
+        bold: false,
+      },
+      {
+        key: "R2",
+        label: "R²",
+        fmt: (s) => s.R2.toFixed(4),
+        color: (s) => s.R2 > 0.9 ? T.green : s.R2 > 0.7 ? T.amber : T.red,
+        bold: true,
+      },
+      {
+        key: "R2adj",
+        label: "R² ajusté",
+        fmt: (s) => s.R2adj.toFixed(4),
+        color: (s, i) => i === bestCompareIdx ? T.green : s.R2adj > 0.7 ? T.amber : T.red,
+        bold: true,
+        isBestRow: true,
+      },
+      {
+        key: "F",
+        label: "F calculé",
+        fmt: (s) => s.F !== null ? s.F.toFixed(3) : "—",
+        color: () => "var(--text)",
+        bold: false,
+      },
+      {
+        key: "pF",
+        label: "Prob > F",
+        fmt: (s) => s.pF !== null ? (s.pF < 0.0001 ? "< 0.0001" : s.pF.toFixed(4)) : "—",
+        color: (s) => s.pF !== null && s.pF < 0.05 ? T.green : s.pF !== null ? T.red : "var(--text-muted)",
+        bold: true,
+      },
+      {
+        key: "ddl",
+        label: "ddl rég. / rés.",
+        fmt: (s) => `${s.dfR} / ${s.dfE}`,
+        color: () => "var(--text-muted)",
+        bold: false,
+      },
+    ];
+
+    const colW = `${Math.round(80 / modelCompareRows.length)}%`;
+
+    return (
+      <Card style={{ border: `1px solid ${T.purple}33` }}>
+        <SectionTitle>Tableau comparatif — statistiques par modèle</SectionTitle>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 14, lineHeight: 1.6 }}>
+          Les valeurs se recalculent automatiquement lorsque vous activez ou désactivez des termes ci-dessus.
+          {excludedTerms.size > 0 && (
+            <span style={{ color: T.amber, fontWeight: 600 }}>
+              {" "}— {excludedTerms.size} terme{excludedTerms.size > 1 ? "s" : ""} exclu{excludedTerms.size > 1 ? "s" : ""} du modèle.
+            </span>
+          )}
+        </p>
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr>
+                <th style={{ ...thStyle, textAlign: "left", minWidth: 130, width: "20%" }}>Critère</th>
+                {modelCompareRows.map((m, i) => (
+                  <th key={m.id} style={{
+                    ...thStyle,
+                    color: m.col,
+                    width: colW,
+                    background: i === bestCompareIdx ? m.bg : "var(--bg-card)",
+                    borderBottom: i === bestCompareIdx ? `2px solid ${m.col}` : `0.5px solid var(--border)`,
+                    position: "relative",
+                  }}>
+                    {m.lb.replace("Modèle ", "")}
+                    {i === bestCompareIdx && (
+                      <span style={{
+                        display: "block", fontSize: 9, fontWeight: 700, letterSpacing: "0.06em",
+                        textTransform: "uppercase", color: m.col, marginTop: 2, opacity: 0.8,
+                      }}>★ meilleur</span>
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rowDefs.map((row, ri) => (
+                <tr key={row.key} style={{ background: ri % 2 === 0 ? "transparent" : "var(--bg-card)" }}>
+                  <td style={{
+                    ...tdStyle, textAlign: "left", fontWeight: 600,
+                    fontSize: 12, color: "var(--text-muted)", paddingLeft: 12,
+                  }}>
+                    {row.label}
+                  </td>
+                  {modelCompareRows.map((m, i) => {
+                    const val = row.fmt(m);
+                    const col = row.color(m, i);
+                    const isBest = row.isBestRow && i === bestCompareIdx;
+                    return (
+                      <td key={m.id} style={{
+                        ...tdStyle,
+                        fontWeight: row.bold ? 700 : 400,
+                        color: col,
+                        background: isBest ? m.bg + "55" : "transparent",
+                        fontVariantNumeric: "tabular-nums",
+                        fontSize: 13,
+                      }}>
+                        {val}
+                        {isBest && (
+                          <span style={{ marginLeft: 4, fontSize: 10, color: m.col }}>▲</span>
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        {/* Légende couleurs */}
+        <div style={{ marginTop: 12, display: "flex", gap: 18, flexWrap: "wrap", fontSize: 11, color: "var(--text-muted)" }}>
+          <span><span style={{ color: T.green, fontWeight: 700 }}>■</span> Valeur favorable</span>
+          <span><span style={{ color: T.amber, fontWeight: 700 }}>■</span> Valeur acceptable</span>
+          <span><span style={{ color: T.red, fontWeight: 700 }}>■</span> Valeur défavorable</span>
+          <span><span style={{ color: "var(--text)", fontWeight: 700 }}>★</span> Meilleur R² ajusté</span>
+        </div>
+      </Card>
+    );
+  };
+
   const RemodelBlock = () => (
     <Card style={{ border: `1px solid ${T.purple}55`, background: `${T.purpleBg}55` }}>
       <div style={{ marginBottom: 12 }}>
@@ -1475,6 +1639,7 @@ function Step4({ factors, rname, runit, C, ys, yc, useCenter, mse, rawObs, onBac
       {activeTab === "remodel" && (
         <div>
           <RemodelBlock />
+          <ModelCompareTable />
         </div>
       )}
 
@@ -1538,23 +1703,17 @@ export default function PlanFactoriel({ onBack }) {
   }
 
   return (
-    <div style={{ fontFamily: "system-ui, sans-serif", color: "var(--text)", minHeight: "100vh" }}>
+    <div style={{ fontFamily: "system-ui, sans-serif", color: "var(--text)", maxWidth: 1040, margin: "0 auto", padding: "1rem 0" }}>
 
-      {/* Header */}
-      <div style={{ background: "#16a34a", color: "#fff", padding: "14px 24px", display: "flex", alignItems: "center", gap: 12, marginBottom: "1.5rem" }}>
-        {onBack && (
-          <button onClick={onBack} style={{ padding: "5px 12px", borderRadius: 7, border: "1px solid rgba(255,255,255,0.3)", background: "transparent", color: "rgba(255,255,255,0.8)", fontSize: 12, fontWeight: 600, cursor: "pointer", flexShrink: 0 }}>
-            ← Menu
-          </button>
-        )}
-        <div style={{ width: 34, height: 34, borderRadius: 8, background: "rgba(255,255,255,0.12)", border: "1px solid rgba(255,255,255,0.22)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17 }}>📊</div>
+      {/* En-tête */}
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: "1.5rem" }}>
         <div>
-          <div style={{ fontSize: 15, fontWeight: 700 }}>Plan factoriel 2ⁿ</div>
-          <div style={{ fontSize: 11, opacity: 0.6, marginTop: 1 }}>BTS Métiers de la Chimie — Module Plans d'expériences</div>
+          <h2 style={{ fontSize: 20, fontWeight: 500, margin: "0 0 4px", color: "var(--text)" }}>Plans factoriels 2ⁿ</h2>
+          <p style={{ fontSize: 13, color: "var(--text-muted)", margin: 0 }}>
+            Estimation des effets principaux et des interactions · BTS Métiers de la Chimie
+          </p>
         </div>
       </div>
-
-      <div style={{ maxWidth: 1040, margin: "0 auto", padding: "0 1rem 1rem" }}>
 
       {/* Barre de progression cliquable */}
       <ProgressBar step={step} maxStep={maxStep} onStep={(n) => setStep(n)} />
@@ -1588,7 +1747,6 @@ export default function PlanFactoriel({ onBack }) {
           onBack={() => setStep(2)} onRestart={restart}
         />
       )}
-      </div>
     </div>
   );
 }
