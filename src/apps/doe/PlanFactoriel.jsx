@@ -205,10 +205,13 @@ export default function PlanFactoriel() {
   const [showCubicDialog, setShowCubicDialog] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loadedExampleId, setLoadedExampleId] = useState(null);
+  const [loadError, setLoadError] = useState(null);
 
   const loadExample = async (ex) => {
+    setLoadError(null);
     try {
-      const res = await fetch(`/examples/${ex.file}`);
+      const res = await fetch(ex.url);
+      if (!res.ok) throw new Error(`HTTP ${res.status} — ${ex.url}`);
       const data = await res.json();
       const { factors: f, responses: r, centerPoint: cp, modelDefault: md } = loadExampleData(data);
       setFactors(f);
@@ -222,6 +225,7 @@ export default function PlanFactoriel() {
       setSidebarOpen(false);
     } catch (e) {
       console.error("Erreur chargement exemple:", e);
+      setLoadError(e.message);
     }
   };
 
@@ -444,6 +448,12 @@ export default function PlanFactoriel() {
                           </button>
                         ))}
                       </div>
+                    {loadError && (
+                      <div className="mx-4 mt-2 mb-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 px-3 py-2">
+                        <p className="text-xs text-red-600 dark:text-red-400 font-medium mb-0.5">Erreur de chargement</p>
+                        <p className="text-[11px] text-red-500 dark:text-red-400 break-all">{loadError}</p>
+                      </div>
+                    )}
                     </div>
                   </div>
                 </DialogPanel>
