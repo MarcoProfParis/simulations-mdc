@@ -441,6 +441,171 @@ function fmtP(p) {
 
 // ─── export PDF (impression navigateur) ─────────────────────────────────────
 
+function buildResidualSVG(yHat, residuals, dotColor) {
+  if (!yHat || yHat.length === 0) return "";
+  const W = 480, H = 220, PAD = 40;
+  const minX = Math.min(...yHat), maxX = Math.max(...yHat);
+  const rangeX = maxX - minX || 1;
+  const maxR = Math.max(...residuals.map(Math.abs)) || 1;
+  const cx = (v) => PAD + (v - minX) / rangeX * (W - 2 * PAD);
+  const cy = (v) => H / 2 - v / maxR * (H / 2 - PAD);
+  const points = yHat.map((x, i) =>
+    `<circle cx="${cx(x).toFixed(1)}" cy="${cy(residuals[i]).toFixed(1)}" r="5" fill="${dotColor}" fill-opacity="0.85"/>`
+  ).join("");
+  const labels = yHat.map((x, i) => {
+    const px = cx(x), py = cy(residuals[i]);
+    const above = py > H / 2;
+    return `<text x="${px.toFixed(1)}" y="${(above ? py - 8 : py + 14).toFixed(1)}" text-anchor="middle" font-size="8" fill="#6b7280">${i+1}</text>`;
+  }).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+    <rect width="${W}" height="${H}" fill="#f9fafb" rx="4"/>
+    <line x1="${PAD}" y1="${H/2}" x2="${W-PAD}" y2="${H/2}" stroke="#d1d5db" stroke-width="1"/>
+    <line x1="${PAD}" y1="${PAD}" x2="${PAD}" y2="${H-PAD}" stroke="#d1d5db" stroke-width="1"/>
+    <text x="${PAD-6}" y="${H/2+4}" text-anchor="end" font-size="9" fill="#9ca3af">0</text>
+    ${points}
+    ${labels}
+    <text x="${W/2}" y="${H-4}" text-anchor="middle" font-size="10" fill="#9ca3af">Ŷ</text>
+    <text x="10" y="${H/2}" text-anchor="middle" font-size="10" fill="#9ca3af" transform="rotate(-90,10,${H/2})">Résidu</text>
+  </svg>`;
+}
+
+function buildParetoSVG(effects, color) {
+  if (!effects || effects.length === 0) return "";
+  const BAR_H = 20, GAP = 6, LABEL_W = 60, VAL_W = 60, PAD_T = 10, PAD_R = 16;
+  const W = 500, maxAbs = effects[0]?.absCoeff || 1;
+  const BAR_W = W - LABEL_W - VAL_W - PAD_R;
+  const H = effects.length * (BAR_H + GAP) + PAD_T * 2;
+  const rows = effects.map((ef, i) => {
+    const y = PAD_T + i * (BAR_H + GAP);
+    const barPx = Math.max(2, ef.absCoeff / maxAbs * BAR_W);
+    const signif = ef.p !== null && ef.p < 0.05;
+    const barColor = signif ? (ef.coeff >= 0 ? color : "#ef4444") : "#d1d5db";
+    return `
+      <text x="${LABEL_W - 4}" y="${y + BAR_H/2 + 4}" text-anchor="end" font-size="9" fill="#6b7280">${ef.label}</text>
+      <rect x="${LABEL_W}" y="${y}" width="${BAR_W}" height="${BAR_H}" fill="#f3f4f6" rx="3"/>
+      <rect x="${LABEL_W}" y="${y}" width="${barPx.toFixed(1)}" height="${BAR_H}" fill="${barColor}" rx="3"/>
+      <text x="${LABEL_W + BAR_W + 4}" y="${y + BAR_H/2 + 4}" font-size="9" fill="#374151" font-family="monospace">${ef.coeff >= 0 ? "+" : ""}${ef.coeff.toFixed(3)}</text>
+    `;
+  }).join("");
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+    <rect width="${W}" height="${H}" fill="#f9fafb" rx="4"/>
+    ${rows}
+  </svg>`;
+}
+
+function buildIsoSVG(model, fit, factors, color) {
+  const contFactors = factors.filter(f => f.continuous);
+  if (contFactors.length < 2) return "";
+  const f1 = contFactors[0], f2 = contFactors[1];
+  const GRID = 50;
+  const W = 320, H = 320, PAD_L = 44, PAD_B = 32, PAD_T = 14, PAD_R = 14;
+  const PW = W - PAD_L - PAD_R, PH = H - PAD_T - PAD_B;
+
+  const predict = (c1, c2) => {
+    const coded = {};
+    factors.forEach(f => { coded[f.id] = 0; });
+    coded[f1.id] = c1; coded[f2.id] = c2;
+    let y = fit.coeffs[0];
+    model.terms.forEach((t, i) => {
+      let val;
+      if (isQuadPure(t, factors)) {
+        const fac = factors.find(fc => t === quadPureTerm(fc.id));
+        val = (coded[fac.id] ?? 0) ** 2;
+      } else {
+        val = factors.filter(fac => t.includes(fac.id)).reduce((p, fac) => p * (coded[fac.id] ?? 0), 1);
+      }
+      y += fit.coeffs[i + 1] * val;
+    });
+    return y;
+  };
+
+  const xs = Array.from({ length: GRID }, (_, i) => -1 + i * 2 / (GRID - 1));
+  const grid = xs.map(y2 => xs.map(x1 => predict(x1, y2)));
+  const flat = grid.flat();
+  const minZ = Math.min(...flat), maxZ = Math.max(...flat);
+  const nLevels = 6;
+  const levels = Array.from({ length: nLevels }, (_, i) => minZ + (i + 1) * (maxZ - minZ) / (nLevels + 1));
+  const lineColors = ["#3b82f6","#6366f1","#8b5cf6","#a855f7","#ec4899","#ef4444"];
+
+  const gx = (gi) => PAD_L + (gi / (GRID - 1)) * PW;
+  const gy = (gj) => PAD_T + (1 - gj / (GRID - 1)) * PH;
+
+  function marchingSquares(level) {
+    const segs = [];
+    const lerp = (a, b, va, vb) => a + (b - a) * (level - va) / (vb - va);
+    for (let j = 0; j < GRID - 1; j++) {
+      for (let i = 0; i < GRID - 1; i++) {
+        const v00 = grid[j][i], v10 = grid[j][i+1], v01 = grid[j+1][i], v11 = grid[j+1][i+1];
+        const idx = (v00>=level?8:0)|(v10>=level?4:0)|(v11>=level?2:0)|(v01>=level?1:0);
+        if (idx === 0 || idx === 15) continue;
+        const top=[lerp(i,i+1,v00,v10),j], right=[i+1,lerp(j,j+1,v10,v11)];
+        const bottom=[lerp(i,i+1,v01,v11),j+1], left=[i,lerp(j,j+1,v00,v01)];
+        const lines={1:[left,bottom],2:[bottom,right],3:[left,right],4:[right,top],6:[bottom,top],7:[left,top],8:[top,left],9:[top,bottom],11:[top,right],12:[right,left],13:[bottom,left],14:[right,bottom]};
+        const pts = lines[idx]; if (!pts) continue;
+        if (pts.length===2) segs.push([pts[0],pts[1]]);
+      }
+    }
+    return segs;
+  }
+
+  const toReal = (f, coded) => {
+    const mid = (f.low.real + f.high.real) / 2;
+    const half = (f.high.real - f.low.real) / 2;
+    return (mid + coded * half).toFixed(1);
+  };
+
+  const ticks = [-1, -0.5, 0, 0.5, 1];
+  const clipId = `clip_${Math.random().toString(36).slice(2,8)}`;
+
+  const isoLines = levels.map((level, li) => {
+    const segs = marchingSquares(level);
+    const col = lineColors[li % lineColors.length];
+    const lines = segs.map(([p0, p1]) =>
+      `<line x1="${gx(p0[0]).toFixed(1)}" y1="${gy(p0[1]).toFixed(1)}" x2="${gx(p1[0]).toFixed(1)}" y2="${gy(p1[1]).toFixed(1)}" stroke="${col}" stroke-width="1.5" stroke-linecap="round"/>`
+    ).join("");
+    // Label at middle segment
+    if (segs.length > 0) {
+      const mid = segs[Math.floor(segs.length / 2)];
+      const lx = ((gx(mid[0][0]) + gx(mid[1][0])) / 2).toFixed(1);
+      const ly = ((gy(mid[0][1]) + gy(mid[1][1])) / 2).toFixed(1);
+      return `${lines}<rect x="${+lx-14}" y="${+ly-7}" width="28" height="13" rx="2" fill="white" fill-opacity="0.9"/>
+        <text x="${lx}" y="${+ly+4}" text-anchor="middle" font-size="8" font-weight="600" fill="${col}">${level.toFixed(1)}</text>`;
+    }
+    return lines;
+  }).join("");
+
+  const ticksX = ticks.map(v => {
+    const px = (PAD_L + (v+1)/2*PW).toFixed(1);
+    return `<line x1="${px}" y1="${PAD_T+PH}" x2="${px}" y2="${PAD_T+PH+4}" stroke="#9ca3af" stroke-width="0.8"/>
+      <text x="${px}" y="${PAD_T+PH+14}" text-anchor="middle" font-size="8" fill="#9ca3af">${toReal(f1,v)}</text>`;
+  }).join("");
+  const ticksY = ticks.map(v => {
+    const py = (PAD_T + (1-(v+1)/2)*PH).toFixed(1);
+    return `<line x1="${PAD_L-4}" y1="${py}" x2="${PAD_L}" y2="${py}" stroke="#9ca3af" stroke-width="0.8"/>
+      <text x="${PAD_L-6}" y="${+py+3}" text-anchor="end" font-size="8" fill="#9ca3af">${toReal(f2,v)}</text>`;
+  }).join("");
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${W}" height="${H}">
+    <defs><clipPath id="${clipId}"><rect x="${PAD_L}" y="${PAD_T}" width="${PW}" height="${PH}"/></clipPath></defs>
+    <rect width="${W}" height="${H}" fill="white"/>
+    <rect x="${PAD_L}" y="${PAD_T}" width="${PW}" height="${PH}" fill="#f9fafb" stroke="#e5e7eb" stroke-width="0.5"/>
+    ${ticks.map(v => {
+      const px = (PAD_L + (v+1)/2*PW).toFixed(1);
+      const py = (PAD_T + (1-(v+1)/2)*PH).toFixed(1);
+      return `<line x1="${px}" y1="${PAD_T}" x2="${px}" y2="${PAD_T+PH}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="3,3"/>
+        <line x1="${PAD_L}" y1="${py}" x2="${PAD_L+PW}" y2="${py}" stroke="#e5e7eb" stroke-width="0.5" stroke-dasharray="3,3"/>`;
+    }).join("")}
+    <g clip-path="url(#${clipId})">${isoLines}</g>
+    ${ticksX}${ticksY}
+    <text x="${(PAD_L+PW/2).toFixed(1)}" y="${H-2}" text-anchor="middle" font-size="9" fill="#6b7280">${f1.name}${f1.unit?" ("+f1.unit+")":""}</text>
+    <text x="10" y="${(PAD_T+PH/2).toFixed(1)}" text-anchor="middle" font-size="9" fill="#6b7280" transform="rotate(-90,10,${(PAD_T+PH/2).toFixed(1)})">${f2.name}${f2.unit?" ("+f2.unit+")":""}</text>
+  </svg>`;
+}
+
+function svgToDataUrl(svgStr) {
+  return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgStr)));
+}
+
 function exportPDF({ models, fits, factors, responses, activeResp, allValidRows, activeRows, excludedPoints, validY, modelDefault, matrix }) {
   const date = new Date().toLocaleDateString("fr-FR", { year: "numeric", month: "long", day: "numeric" });
   const modelColors = ["#6366f1", "#10b981", "#f59e0b"];
@@ -459,16 +624,10 @@ function exportPDF({ models, fits, factors, responses, activeResp, allValidRows,
     factors.forEach((f, i) => { s = s.replaceAll(f.id, `${i+1}`); });
     return s;
   };
-
-  const sigStar = (p) => {
-    if (p === null || p === undefined) return "";
-    if (p < 0.001) return "***"; if (p < 0.01) return "**";
-    if (p < 0.05) return "*"; if (p < 0.1) return "·";
-    return "";
-  };
-  const f4 = (v) => (v === null || v === undefined || !isFinite(v)) ? "—" : v.toFixed(4);
-  const f3 = (v) => (v === null || v === undefined || !isFinite(v)) ? "—" : v.toFixed(3);
-  const fp = (p) => { if (p === null || p === undefined) return "—"; if (p < 0.001) return "< 0.001"; return p.toFixed(3); };
+  const sigStar = (p) => { if (p===null||p===undefined) return ""; if (p<0.001) return "***"; if (p<0.01) return "**"; if (p<0.05) return "*"; if (p<0.1) return "·"; return ""; };
+  const f4 = (v) => (v===null||v===undefined||!isFinite(v)) ? "—" : v.toFixed(4);
+  const f3 = (v) => (v===null||v===undefined||!isFinite(v)) ? "—" : v.toFixed(3);
+  const fp = (p) => { if (p===null||p===undefined) return "—"; if (p<0.001) return "< 0.001"; return p.toFixed(3); };
 
   const modelSection = (m, fit, color) => {
     if (!fit) return `<div class="model-card"><h3 style="color:${color}">${m.name}</h3><p class="error">Calcul impossible — données insuffisantes.</p></div>`;
@@ -477,22 +636,22 @@ function exportPDF({ models, fits, factors, responses, activeResp, allValidRows,
     const verdict = (fit.pF !== null && fit.pF < 0.05 && fit.R2adj > 0.8) ? "acceptable" : (fit.pF !== null && fit.pF >= 0.05) ? "à rejeter" : "insuffisant";
     const verdictColor = verdict === "acceptable" ? "#059669" : verdict === "à rejeter" ? "#dc2626" : "#d97706";
 
-    // Effects sorted
     const effects = m.terms.map((t, i) => ({ label: termLbl(t), coeff: fit.coeffs[i+1], absCoeff: Math.abs(fit.coeffs[i+1]), p: fit.pCoeffs[i+1] }))
       .sort((a, b) => b.absCoeff - a.absCoeff);
     const maxAbs = effects[0]?.absCoeff || 1;
+
+    // Graphiques SVG
+    const residSvg = buildResidualSVG(fit.yHat, fit.residuals, color);
+    const paretoSvg = buildParetoSVG(effects, color);
+    const isoSvg = buildIsoSVG(m, fit, factors, color);
 
     return `
     <div class="model-card" style="border-left: 4px solid ${color}">
       <h3 style="color:${color}">${m.name}</h3>
 
-      <!-- Équation -->
       <h4>Équation du modèle</h4>
-      <div class="equation">
-        Ŷ = α₀${m.terms.map(t => ` + α<sub>${termSub(t)}</sub>·${termLbl(t)}`).join("")}
-      </div>
+      <div class="equation">Ŷ = α₀${m.terms.map(t => ` + α<sub>${termSub(t)}</sub>·${termLbl(t)}`).join("")}</div>
 
-      <!-- Indicateurs -->
       <div class="metrics-row">
         <div class="metric"><span class="metric-label">R²</span><span class="metric-val">${f4(fit.R2)}</span></div>
         <div class="metric"><span class="metric-label">R² ajusté</span><span class="metric-val">${f4(fit.R2adj)}</span></div>
@@ -501,91 +660,65 @@ function exportPDF({ models, fits, factors, responses, activeResp, allValidRows,
         <div class="metric"><span class="metric-label">Verdict</span><span class="metric-val" style="color:${verdictColor};font-weight:700">Modèle ${verdict}</span></div>
       </div>
 
-      <!-- Coefficients -->
       <h4>Coefficients estimés</h4>
       <table>
         <thead><tr><th>Terme</th><th>Estimation</th><th>Écart-type</th><th>t ratio</th><th>Prob &gt; |t|</th><th>Sig.</th></tr></thead>
-        <tbody>
-          ${fit.coeffs.map((c, ci) => {
-            const p = fit.pCoeffs[ci];
-            const sig = sigStar(p);
-            const signif = p !== null && p < 0.05;
-            return `<tr class="${signif ? "signif-row" : ""}">
-              <td class="mono">${allLabels[ci]}</td>
-              <td class="mono right bold">${f4(c)}</td>
-              <td class="mono right">${f4(fit.seCoeffs[ci])}</td>
-              <td class="mono right">${f3(fit.tStats[ci])}</td>
-              <td class="mono right ${signif ? "signif" : ""}">${fp(p)}</td>
-              <td class="center bold amber">${sig}</td>
-            </tr>`;
-          }).join("")}
-        </tbody>
+        <tbody>${fit.coeffs.map((c, ci) => {
+          const p = fit.pCoeffs[ci]; const sig = sigStar(p); const signif = p !== null && p < 0.05;
+          return `<tr class="${signif?"signif-row":""}"><td class="mono">${allLabels[ci]}</td><td class="mono right bold">${f4(c)}</td><td class="mono right">${f4(fit.seCoeffs[ci])}</td><td class="mono right">${f3(fit.tStats[ci])}</td><td class="mono right ${signif?"signif":""}">${fp(p)}</td><td class="center bold amber">${sig}</td></tr>`;
+        }).join("")}</tbody>
       </table>
       <p class="note">Significativité : *** p&lt;0.001 · ** p&lt;0.01 · * p&lt;0.05 · · p&lt;0.1</p>
 
-      <!-- ANOVA -->
       <h4>Analyse de la variance (ANOVA)</h4>
       <table>
         <thead><tr><th>Source</th><th>SC</th><th>dl</th><th>CM</th><th>F</th><th>Prob &gt; F</th></tr></thead>
         <tbody>
-          <tr><td>Régression</td><td class="mono right">${f4(fit.SSR)}</td><td class="right">${fit.dfR}</td><td class="mono right">${f4(fit.MSR)}</td><td class="mono right">${f3(fit.Fstat)}</td><td class="mono right ${fit.pF < 0.05 ? "signif" : ""}">${fp(fit.pF)}</td></tr>
+          <tr><td>Régression</td><td class="mono right">${f4(fit.SSR)}</td><td class="right">${fit.dfR}</td><td class="mono right">${f4(fit.MSR)}</td><td class="mono right">${f3(fit.Fstat)}</td><td class="mono right ${fit.pF<0.05?"signif":""}">${fp(fit.pF)}</td></tr>
           <tr><td>Résidus</td><td class="mono right">${f4(fit.SSE)}</td><td class="right">${fit.dfE}</td><td class="mono right">${f4(fit.MSE)}</td><td>—</td><td>—</td></tr>
-          <tr class="total-row"><td>Total</td><td class="mono right">${f4(fit.SST)}</td><td class="right">${fit.n - 1}</td><td>—</td><td>—</td><td>—</td></tr>
+          <tr class="total-row"><td>Total</td><td class="mono right">${f4(fit.SST)}</td><td class="right">${fit.n-1}</td><td>—</td><td>—</td><td>—</td></tr>
         </tbody>
       </table>
       <div class="verdict-box" style="border-color:${verdictColor};background:${verdictColor}18">
         <strong style="color:${verdictColor}">Conclusion : Modèle ${verdict}</strong><br>
-        R² ajusté = ${f4(fit.R2adj)} ${fit.R2adj >= 0.8 ? "✓ bon ajustement" : "△ insuffisant"} · 
-        ANOVA : Prob&gt;F = ${fp(fit.pF)} ${fit.pF < 0.05 ? "✓ modèle significatif" : "✗ modèle non significatif"} · 
+        R² ajusté = ${f4(fit.R2adj)} ${fit.R2adj>=0.8?"✓ bon ajustement":"△ insuffisant"} · 
+        ANOVA Prob&gt;F = ${fp(fit.pF)} ${fit.pF<0.05?"✓ significatif":"✗ non significatif"} · 
         dl résidus = ${fit.dfE}
       </div>
 
-      <!-- Résidus -->
-      <h4>Tableau des résidus${excludedPoints.size > 0 ? ` (${excludedPoints.size} point(s) exclu(s))` : ""}</h4>
+      <h4>Tableau des résidus${excludedPoints.size>0?` (${excludedPoints.size} point(s) exclu(s))`:""}</h4>
       <table>
         <thead><tr><th>#</th><th>Statut</th><th>Y mesuré</th><th>Ŷ calculé</th><th>Résidu</th><th>Résidu normé</th></tr></thead>
-        <tbody>
-          ${allValidRows.map(({ i: globalIdx, y }, rowIdx) => {
-            const isExcluded = excludedPoints.has(globalIdx);
-            const activeIdx = activeRows.findIndex(x => x.i === globalIdx);
-            const resid = !isExcluded && activeIdx >= 0 ? fit.residuals[activeIdx] : null;
-            const yHatVal = !isExcluded && activeIdx >= 0 ? fit.yHat[activeIdx] : null;
-            const normed = resid !== null && fit.MSE > 0 ? resid / Math.sqrt(fit.MSE) : null;
-            const isLarge = normed !== null && Math.abs(normed) > 2;
-            return `<tr class="${isExcluded ? "excluded-row" : isLarge ? "large-resid" : ""}">
-              <td class="right">${globalIdx + 1}</td>
-              <td class="center">${isExcluded ? "exclu" : "actif"}</td>
-              <td class="mono right">${f3(y)}</td>
-              <td class="mono right">${yHatVal !== null ? f3(yHatVal) : "—"}</td>
-              <td class="mono right ${resid !== null ? (resid >= 0 ? "pos" : "neg") : ""}">${resid !== null ? f3(resid) : "—"}</td>
-              <td class="mono right ${isLarge ? "large-val" : ""}">${normed !== null ? f3(normed) : "—"}</td>
-            </tr>`;
-          }).join("")}
-        </tbody>
+        <tbody>${allValidRows.map(({ i: globalIdx, y }) => {
+          const isExcluded = excludedPoints.has(globalIdx);
+          const activeIdx = activeRows.findIndex(x => x.i === globalIdx);
+          const resid = !isExcluded && activeIdx>=0 ? fit.residuals[activeIdx] : null;
+          const yHatVal = !isExcluded && activeIdx>=0 ? fit.yHat[activeIdx] : null;
+          const normed = resid!==null && fit.MSE>0 ? resid/Math.sqrt(fit.MSE) : null;
+          const isLarge = normed!==null && Math.abs(normed)>2;
+          return `<tr class="${isExcluded?"excluded-row":isLarge?"large-resid":""}">
+            <td class="right">${globalIdx+1}</td><td class="center">${isExcluded?"exclu":"actif"}</td>
+            <td class="mono right">${f3(y)}</td><td class="mono right">${yHatVal!==null?f3(yHatVal):"—"}</td>
+            <td class="mono right ${resid!==null?(resid>=0?"pos":"neg"):""}">${resid!==null?f3(resid):"—"}</td>
+            <td class="mono right ${isLarge?"large-val":""}">${normed!==null?f3(normed):"—"}</td>
+          </tr>`;
+        }).join("")}</tbody>
       </table>
 
-      <!-- Pareto -->
+      <h4>Graphique des résidus vs Ŷ</h4>
+      <div class="chart-wrap">
+        <img src="${svgToDataUrl(residSvg)}" width="480" height="220" style="max-width:100%" alt="Résidus vs Ŷ"/>
+      </div>
+
       <h4>Diagramme de Pareto des effets</h4>
-      <table>
-        <thead><tr><th>Terme</th><th>Coefficient</th><th>|Effet| relatif</th><th>Prob &gt; |t|</th><th>Sig.</th></tr></thead>
-        <tbody>
-          ${effects.map(ef => {
-            const barPct = maxAbs > 0 ? ef.absCoeff / maxAbs * 100 : 0;
-            const signif = ef.p !== null && ef.p < 0.05;
-            return `<tr class="${signif ? "signif-row" : ""}">
-              <td class="mono">${ef.label}</td>
-              <td class="mono right ${ef.coeff >= 0 ? "pos" : "neg"}">${f4(ef.coeff)}</td>
-              <td>
-                <div class="bar-bg">
-                  <div class="bar-fill ${signif ? "bar-signif" : "bar-ns"}" style="width:${barPct.toFixed(1)}%"></div>
-                </div>
-              </td>
-              <td class="mono right ${signif ? "signif" : ""}">${fp(ef.p)}</td>
-              <td class="center bold amber">${sigStar(ef.p)}</td>
-            </tr>`;
-          }).join("")}
-        </tbody>
-      </table>
+      <div class="chart-wrap">
+        <img src="${svgToDataUrl(paretoSvg)}" width="500" style="max-width:100%" alt="Pareto effets"/>
+      </div>
+
+      ${isoSvg ? `<h4>Courbes isoréponses (${factors.filter(f=>f.continuous)[0]?.name} × ${factors.filter(f=>f.continuous)[1]?.name})</h4>
+      <div class="chart-wrap">
+        <img src="${svgToDataUrl(isoSvg)}" width="320" height="320" style="max-width:100%" alt="Isoréponses"/>
+      </div>` : ""}
     </div>`;
   };
 
@@ -597,169 +730,102 @@ function exportPDF({ models, fits, factors, responses, activeResp, allValidRows,
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11px; color: #111; background: white; padding: 20mm; }
-    h1 { font-size: 20px; font-weight: 700; color: #111; margin-bottom: 4px; }
+    h1 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
     h2 { font-size: 14px; font-weight: 600; color: #374151; margin: 20px 0 8px; border-bottom: 1.5px solid #e5e7eb; padding-bottom: 4px; }
     h3 { font-size: 13px; font-weight: 700; margin-bottom: 12px; }
-    h4 { font-size: 11px; font-weight: 600; color: #4b5563; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+    h4 { font-size: 10px; font-weight: 600; color: #4b5563; margin: 14px 0 6px; text-transform: uppercase; letter-spacing: 0.05em; }
     .header { margin-bottom: 24px; padding-bottom: 16px; border-bottom: 2px solid #111; }
     .header-meta { font-size: 10px; color: #6b7280; margin-top: 6px; }
     .model-card { margin-bottom: 32px; padding: 16px; border: 1px solid #e5e7eb; border-radius: 8px; break-inside: avoid; }
     .equation { font-family: 'Courier New', monospace; font-size: 12px; background: #f9fafb; border: 1px solid #e5e7eb; padding: 8px 12px; border-radius: 6px; margin-bottom: 12px; }
     .metrics-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-    .metric { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 12px; text-align: center; min-width: 100px; }
-    .metric-label { display: block; font-size: 9px; color: #9ca3af; margin-bottom: 2px; text-transform: uppercase; letter-spacing: 0.04em; }
+    .metric { background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px 12px; text-align: center; min-width: 90px; }
+    .metric-label { display: block; font-size: 9px; color: #9ca3af; margin-bottom: 2px; text-transform: uppercase; }
     .metric-val { display: block; font-size: 12px; font-weight: 600; font-family: 'Courier New', monospace; }
     table { width: 100%; border-collapse: collapse; margin-bottom: 8px; font-size: 10px; }
-    th { background: #f3f4f6; text-align: left; padding: 5px 8px; font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.04em; border-bottom: 1px solid #e5e7eb; }
+    th { background: #f3f4f6; text-align: left; padding: 5px 8px; font-size: 9px; font-weight: 600; color: #6b7280; text-transform: uppercase; border-bottom: 1px solid #e5e7eb; }
     td { padding: 4px 8px; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
     tr:last-child td { border-bottom: none; }
     .mono { font-family: 'Courier New', monospace; }
-    .right { text-align: right; }
-    .center { text-align: center; }
-    .bold { font-weight: 700; }
-    .signif { color: #4f46e5; font-weight: 700; }
-    .signif-row { background: #eef2ff; }
-    .amber { color: #d97706; }
-    .pos { color: #059669; }
-    .neg { color: #dc2626; }
-    .large-val { color: #dc2626; font-weight: 700; }
-    .large-resid { background: #fef2f2; }
+    .right { text-align: right; } .center { text-align: center; } .bold { font-weight: 700; }
+    .signif { color: #4f46e5; font-weight: 700; } .signif-row { background: #eef2ff; }
+    .amber { color: #d97706; } .pos { color: #059669; } .neg { color: #dc2626; }
+    .large-val { color: #dc2626; font-weight: 700; } .large-resid { background: #fef2f2; }
     .excluded-row { color: #9ca3af; font-style: italic; }
     .total-row { font-weight: 600; background: #f9fafb; }
     .note { font-size: 9px; color: #9ca3af; margin-top: 4px; }
     .error { color: #dc2626; font-style: italic; }
     .verdict-box { padding: 8px 12px; border-radius: 6px; border: 1px solid; margin-top: 8px; font-size: 10px; line-height: 1.6; }
+    .chart-wrap { margin: 8px 0 12px; background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 6px; padding: 8px; display: inline-block; }
     .bar-bg { width: 100px; height: 10px; background: #f3f4f6; border-radius: 3px; overflow: hidden; }
-    .bar-fill { height: 100%; border-radius: 3px; }
-    .bar-signif { background: #6366f1; }
-    .bar-ns { background: #d1d5db; }
-    .info-table { width: 100%; border-collapse: collapse; font-size: 10px; margin-bottom: 12px; }
-    .info-table td { padding: 3px 8px; border-bottom: 1px solid #f3f4f6; }
-    .info-table .label { color: #6b7280; width: 40%; font-weight: 500; }
+    .bar-fill { height: 100%; border-radius: 3px; } .bar-signif { background: #6366f1; } .bar-ns { background: #d1d5db; }
     .page-break { page-break-before: always; }
     @media print {
       body { padding: 10mm 15mm; }
       .model-card { break-inside: avoid; }
-      table { break-inside: avoid; }
-      h2 { break-after: avoid; }
-      h4 { break-after: avoid; }
+      h2 { break-after: avoid; } h4 { break-after: avoid; }
     }
   </style>
 </head>
 <body>
-
-  <!-- En-tête -->
   <div class="header">
     <h1>Rapport d'analyse — Plans d'expériences</h1>
     <div class="header-meta">
-      Généré le ${date} · Réponse analysée : ${activeResp.name}${activeResp.unit ? ` (${activeResp.unit})` : ""}
-      · ${allValidRows.length} essais${excludedPoints.size > 0 ? ` (${excludedPoints.size} exclu(s))` : ""}
-      · ${models.length} modèle(s) comparé(s)
+      Généré le ${date} · Réponse : ${activeResp.name}${activeResp.unit?" ("+activeResp.unit+")":""} · 
+      ${allValidRows.length} essais${excludedPoints.size>0?" ("+excludedPoints.size+" exclu(s))":""} · 
+      ${models.length} modèle(s)
     </div>
   </div>
 
-  <!-- Facteurs -->
   <h2>Facteurs étudiés</h2>
   <table>
     <thead><tr><th>ID</th><th>Nom</th><th>Unité</th><th>Type</th><th>Niveau bas (−1)</th><th>Niveau haut (+1)</th></tr></thead>
-    <tbody>
-      ${factors.map(f => `<tr>
-        <td class="mono">${f.id}</td>
-        <td>${f.name}</td>
-        <td>${f.unit || "—"}</td>
-        <td>${f.continuous ? "Continu" : "Discret"}</td>
-        <td class="mono">${f.continuous ? f.low.real : (f.low.label || "—")}</td>
-        <td class="mono">${f.continuous ? f.high.real : (f.high.label || "—")}</td>
-      </tr>`).join("")}
-    </tbody>
+    <tbody>${factors.map(f => `<tr><td class="mono">${f.id}</td><td>${f.name}</td><td>${f.unit||"—"}</td><td>${f.continuous?"Continu":"Discret"}</td><td class="mono">${f.continuous?f.low.real:(f.low.label||"—")}</td><td class="mono">${f.continuous?f.high.real:(f.high.label||"—")}</td></tr>`).join("")}</tbody>
   </table>
 
-  <!-- Matrice d'expériences -->
   <h2>Matrice d'expériences</h2>
   <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        ${factors.map(f => `<th>${f.id}</th>`).join("")}
-        ${responses.map(r => `<th>${r.id} (${r.name}${r.unit ? ", " + r.unit : ""})</th>`).join("")}
-        <th>Statut</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${(matrix || []).map((row, ri) => {
-        const isExcluded = excludedPoints.has(ri);
-        const yVal = row.responses[activeResp.id];
-        return `<tr class="${isExcluded ? "excluded-row" : ""}">
-          <td class="right">${row.center ? "PC" : ri + 1}</td>
-          ${factors.map(f => {
-            const c = row.coded[f.id];
-            const rv = row.real[f.id];
-            const cLabel = c === 0 ? "0" : c === -1 ? "−1" : "+1";
-            return `<td class="mono">(${cLabel}) ${f.continuous ? rv ?? "" : rv ?? ""}</td>`;
-          }).join("")}
-          ${responses.map(r => `<td class="mono right">${row.responses[r.id] !== "" && row.responses[r.id] !== null && row.responses[r.id] !== undefined ? row.responses[r.id] : "—"}</td>`).join("")}
-          <td class="center">${isExcluded ? "exclu" : "actif"}</td>
-        </tr>`;
-      }).join("")}
-    </tbody>
+    <thead><tr><th>#</th>${factors.map(f=>`<th>${f.id}</th>`).join("")}${responses.map(r=>`<th>${r.id} (${r.name}${r.unit?", "+r.unit:""})</th>`).join("")}<th>Statut</th></tr></thead>
+    <tbody>${(matrix||[]).map((row,ri) => {
+      const isExcluded = excludedPoints.has(ri);
+      return `<tr class="${isExcluded?"excluded-row":""}">
+        <td class="right">${row.center?"PC":ri+1}</td>
+        ${factors.map(f => { const c=row.coded[f.id]; const rv=row.real[f.id]; const cl=c===0?"0":c===-1?"−1":"+1"; return `<td class="mono">(${cl}) ${rv??""}</td>`; }).join("")}
+        ${responses.map(r => `<td class="mono right">${row.responses[r.id]!==""&&row.responses[r.id]!==null&&row.responses[r.id]!==undefined?row.responses[r.id]:"—"}</td>`).join("")}
+        <td class="center">${isExcluded?"exclu":"actif"}</td>
+      </tr>`;
+    }).join("")}</tbody>
   </table>
 
-  <!-- Modèles -->
   <h2>Résultats par modèle</h2>
-  ${models.map((m, mi) => modelSection(m, fits[mi], modelColors[mi % modelColors.length])).join("")}
+  ${models.map((m,mi) => modelSection(m, fits[mi], modelColors[mi%modelColors.length])).join("")}
 
-  <!-- Comparaison si plusieurs modèles -->
-  ${models.length > 1 ? `
-  <div class="page-break"></div>
+  ${models.length > 1 ? `<div class="page-break"></div>
   <h2>Comparaison des modèles</h2>
   <table>
-    <thead>
-      <tr>
-        <th>Modèle</th>
-        <th>Termes (nb)</th>
-        <th>R²</th>
-        <th>R² ajusté</th>
-        <th>F</th>
-        <th>Prob &gt; F</th>
-        <th>Verdict</th>
-      </tr>
-    </thead>
-    <tbody>
-      ${models.map((m, mi) => {
-        const fit = fits[mi];
-        if (!fit) return `<tr><td>${m.name}</td><td colspan="6" class="center">—</td></tr>`;
-        const verdict = (fit.pF < 0.05 && fit.R2adj > 0.8) ? "acceptable" : fit.pF >= 0.05 ? "à rejeter" : "insuffisant";
-        const verdictColor = verdict === "acceptable" ? "#059669" : verdict === "à rejeter" ? "#dc2626" : "#d97706";
-        return `<tr>
-          <td style="color:${modelColors[mi % modelColors.length]};font-weight:700">${m.name}</td>
-          <td class="right">${m.terms.length + 1}</td>
-          <td class="mono right">${f4(fit.R2)}</td>
-          <td class="mono right">${f4(fit.R2adj)}</td>
-          <td class="mono right">${f3(fit.Fstat)}</td>
-          <td class="mono right ${fit.pF < 0.05 ? "signif" : ""}">${fp(fit.pF)}</td>
-          <td style="color:${verdictColor};font-weight:600">Modèle ${verdict}</td>
-        </tr>`;
-      }).join("")}
-    </tbody>
+    <thead><tr><th>Modèle</th><th>Termes</th><th>R²</th><th>R² ajusté</th><th>F</th><th>Prob &gt; F</th><th>Verdict</th></tr></thead>
+    <tbody>${models.map((m,mi) => {
+      const fit=fits[mi];
+      if (!fit) return `<tr><td>${m.name}</td><td colspan="6" class="center">—</td></tr>`;
+      const verdict=(fit.pF<0.05&&fit.R2adj>0.8)?"acceptable":fit.pF>=0.05?"à rejeter":"insuffisant";
+      const vc=verdict==="acceptable"?"#059669":verdict==="à rejeter"?"#dc2626":"#d97706";
+      return `<tr><td style="color:${modelColors[mi%modelColors.length]};font-weight:700">${m.name}</td><td class="right">${m.terms.length+1}</td><td class="mono right">${f4(fit.R2)}</td><td class="mono right">${f4(fit.R2adj)}</td><td class="mono right">${f3(fit.Fstat)}</td><td class="mono right ${fit.pF<0.05?"signif":""}">${fp(fit.pF)}</td><td style="color:${vc};font-weight:600">Modèle ${verdict}</td></tr>`;
+    }).join("")}</tbody>
   </table>` : ""}
-
 </body>
 </html>`;
 
   const win = window.open("", "_blank", "width=900,height=700");
   win.document.write(html);
   win.document.close();
-  win.onload = () => {
-    setTimeout(() => {
-      win.print();
-    }, 500);
-  };
+  win.onload = () => { setTimeout(() => { win.print(); }, 600); };
 }
 
 
 // ─── sous-composants partie 4 ────────────────────────────────────────────────
 
 function ResidualPlot({ yHat, residuals, color }) {
+  const [hovered, setHovered] = React.useState(null);
   if (!yHat || yHat.length === 0) return null;
   const W = 480, H = 220, PAD = 40;
   const minX = Math.min(...yHat), maxX = Math.max(...yHat);
@@ -768,17 +834,55 @@ function ResidualPlot({ yHat, residuals, color }) {
   const cx = (v) => PAD + (v - minX) / rangeX * (W - 2 * PAD);
   const cy = (v) => H / 2 - v / (rangeY / 2) * (H / 2 - PAD);
   const dotColor = color === "bg-indigo-500" ? "#6366f1" : color === "bg-emerald-500" ? "#10b981" : "#f59e0b";
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 220 }}>
-      {/* Axes */}
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 220, overflow: "visible" }}>
+      {/* Ligne zéro */}
       <line x1={PAD} y1={H / 2} x2={W - PAD} y2={H / 2} stroke="#e5e7eb" strokeWidth="1" />
+      {/* Axe Y */}
       <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="#e5e7eb" strokeWidth="1" />
       {/* Zéro label */}
       <text x={PAD - 6} y={H / 2 + 4} textAnchor="end" fontSize="10" fill="#9ca3af">0</text>
       {/* Points */}
-      {yHat.map((x, i) => (
-        <circle key={i} cx={cx(x)} cy={cy(residuals[i])} r="4" fill={dotColor} fillOpacity="0.8" />
-      ))}
+      {yHat.map((x, i) => {
+        const px = cx(x), py = cy(residuals[i]);
+        const isHov = hovered === i;
+        return (
+          <g key={i}
+            onMouseEnter={() => setHovered(i)}
+            onMouseLeave={() => setHovered(null)}
+            style={{ cursor: "pointer" }}>
+            {/* Zone de survol plus large */}
+            <circle cx={px} cy={py} r="10" fill="transparent" />
+            {/* Point */}
+            <circle cx={px} cy={py} r={isHov ? 6 : 4} fill={dotColor} fillOpacity={isHov ? 1 : 0.8}
+              stroke={isHov ? "white" : "none"} strokeWidth="1.5"
+              style={{ transition: "r 0.1s" }} />
+            {/* Tooltip au survol */}
+            {isHov && (() => {
+              const tipW = 90, tipH = 36, tipPad = 6;
+              // Position : au-dessus à droite si possible
+              let tx = px + 10;
+              let ty = py - tipH - 6;
+              if (tx + tipW > W - 4) tx = px - tipW - 10;
+              if (ty < 4) ty = py + 10;
+              return (
+                <g>
+                  <rect x={tx} y={ty} width={tipW} height={tipH} rx="4"
+                    fill="white" stroke="#e5e7eb" strokeWidth="0.8"
+                    style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.12))" }} />
+                  <text x={tx + tipPad} y={ty + 13} fontSize="10" fontWeight="600" fill="#111">
+                    Point {i + 1}
+                  </text>
+                  <text x={tx + tipPad} y={ty + 26} fontSize="9" fill="#6b7280" fontFamily="monospace">
+                    Ŷ={x.toFixed(2)}  r={residuals[i].toFixed(3)}
+                  </text>
+                </g>
+              );
+            })()}
+          </g>
+        );
+      })}
       {/* Labels axes */}
       <text x={W / 2} y={H - 4} textAnchor="middle" fontSize="10" fill="#9ca3af">Ŷ</text>
       <text x={8} y={H / 2} textAnchor="middle" fontSize="10" fill="#9ca3af" transform={`rotate(-90, 8, ${H/2})`}>Résidu</text>
