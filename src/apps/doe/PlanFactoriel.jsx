@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useTheme } from "../../ThemeContext";
 import { ChevronDownIcon } from "@heroicons/react/16/solid";
 import { EXAMPLE_FILES } from "./exampleFiles";
@@ -222,6 +222,488 @@ function loadExampleData(exFile) {
   return { factors: f, responses: r, centerPoint: cp, modelDefault: md, matrix };
 }
 
+
+// ─── calculs statistiques ────────────────────────────────────────────────────
+
+function buildDesignMatrix(terms, matrixRows, factors) {
+  // Construit la matrice X du modèle (avec constante en première colonne)
+  return matrixRows.map(row => {
+    const x = [1]; // constante α₀
+    terms.forEach(t => {
+      if (isQuadPure(t, factors)) {
+        const f = factors.find(f => t === quadPureTerm(f.id));
+        const c = row.coded[f.id] ?? 0;
+        x.push(c * c);
+      } else {
+        const facs = factors.filter(f => t.includes(f.id));
+        x.push(facs.reduce((prod, f) => prod * (row.coded[f.id] ?? 0), 1));
+      }
+    });
+    return x;
+  });
+}
+
+function matMul(A, B) {
+  const n = A.length, m = B[0].length, k = B.length;
+  return Array.from({ length: n }, (_, i) =>
+    Array.from({ length: m }, (_, j) =>
+      Array.from({ length: k }, (_, l) => A[i][l] * B[l][j]).reduce((a, b) => a + b, 0)
+    )
+  );
+}
+
+function matT(A) {
+  return A[0].map((_, j) => A.map(row => row[j]));
+}
+
+function luSolve(A, b) {
+  const n = A.length;
+  const L = Array.from({ length: n }, (_, i) => Array.from({ length: n }, (_, j) => i === j ? 1 : 0));
+  const U = A.map(r => [...r]);
+  const perm = Array.from({ length: n }, (_, i) => i);
+
+  for (let k = 0; k < n; k++) {
+    let maxVal = Math.abs(U[k][k]), maxRow = k;
+    for (let i = k + 1; i < n; i++) {
+      if (Math.abs(U[i][k]) > maxVal) { maxVal = Math.abs(U[i][k]); maxRow = i; }
+    }
+    if (maxRow !== k) {
+      [U[k], U[maxRow]] = [U[maxRow], U[k]];
+      [perm[k], perm[maxRow]] = [perm[maxRow], perm[k]];
+      for (let j = 0; j < k; j++) [L[k][j], L[maxRow][j]] = [L[maxRow][j], L[k][j]];
+    }
+    for (let i = k + 1; i < n; i++) {
+      if (Math.abs(U[k][k]) < 1e-12) continue;
+      L[i][k] = U[i][k] / U[k][k];
+      for (let j = k; j < n; j++) U[i][j] -= L[i][k] * U[k][j];
+    }
+  }
+
+  const pb = perm.map(i => b[i]);
+  const y = Array(n).fill(0);
+  for (let i = 0; i < n; i++) {
+    y[i] = pb[i] - Array.from({ length: i }, (_, j) => L[i][j] * y[j]).reduce((a, c) => a + c, 0);
+  }
+  const x = Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) {
+    if (Math.abs(U[i][i]) < 1e-12) { x[i] = 0; continue; }
+    x[i] = (y[i] - Array.from({ length: n - i - 1 }, (_, j) => U[i][i + j + 1] * x[i + j + 1]).reduce((a, c) => a + c, 0)) / U[i][i];
+  }
+  return x;
+}
+
+function fitOLS(terms, matrixRows, yValues, factors) {
+  const X = buildDesignMatrix(terms, matrixRows, factors);
+  const Xt = matT(X);
+  const XtX = matMul(Xt, X);
+  const Xty = matMul(Xt, yValues.map(y => [y])).map(r => r[0]);
+
+  let coeffs;
+  try { coeffs = luSolve(XtX, Xty); }
+  catch (e) { return null; }
+
+  const n = matrixRows.length;
+  const p = terms.length + 1; // nb paramètres incl constante
+  const yHat = X.map(row => row.reduce((s, xi, i) => s + xi * coeffs[i], 0));
+  const residuals = yValues.map((y, i) => y - yHat[i]);
+  const yMean = yValues.reduce((a, b) => a + b, 0) / n;
+
+  const SST = yValues.reduce((s, y) => s + (y - yMean) ** 2, 0);
+  const SSR = yHat.reduce((s, yh) => s + (yh - yMean) ** 2, 0);
+  const SSE = residuals.reduce((s, r) => s + r ** 2, 0);
+
+  const dfR = p - 1;
+  const dfE = n - p;
+  const MSR = dfE > 0 ? SSR / dfR : 0;
+  const MSE = dfE > 0 ? SSE / dfE : 0;
+  const Fstat = MSE > 0 ? MSR / MSE : 0;
+  const R2 = SST > 0 ? SSR / SST : 0;
+  const R2adj = SST > 0 && dfE > 0 ? 1 - (SSE / dfE) / (SST / (n - 1)) : 0;
+
+  // p-value approx F via incomplete beta
+  const pF = dfE > 0 ? fPvalue(Fstat, dfR, dfE) : null;
+
+  // Erreur standard des coefficients
+  const seCoeffs = [];
+  try {
+    // diagonale de (XtX)^-1 * MSE
+    const XtXinv = invertMatrix(XtX);
+    for (let i = 0; i < p; i++) {
+      seCoeffs.push(MSE > 0 ? Math.sqrt(Math.abs(XtXinv[i][i] * MSE)) : 0);
+    }
+  } catch (e) {
+    for (let i = 0; i < p; i++) seCoeffs.push(0);
+  }
+
+  const tStats = coeffs.map((c, i) => seCoeffs[i] > 0 ? c / seCoeffs[i] : 0);
+  const pCoeffs = tStats.map(t => dfE > 0 ? tPvalue(Math.abs(t), dfE) : null);
+
+  return {
+    coeffs, seCoeffs, tStats, pCoeffs,
+    yHat, residuals,
+    SST, SSR, SSE, dfR, dfE, MSR, MSE, Fstat, pF,
+    R2, R2adj, n, p,
+  };
+}
+
+function invertMatrix(A) {
+  const n = A.length;
+  const aug = A.map((row, i) => [...row, ...Array.from({ length: n }, (_, j) => i === j ? 1 : 0)]);
+  for (let col = 0; col < n; col++) {
+    let maxRow = col;
+    for (let row = col + 1; row < n; row++)
+      if (Math.abs(aug[row][col]) > Math.abs(aug[maxRow][col])) maxRow = row;
+    [aug[col], aug[maxRow]] = [aug[maxRow], aug[col]];
+    const div = aug[col][col];
+    if (Math.abs(div) < 1e-12) throw new Error("Matrice singulière");
+    for (let j = 0; j < 2 * n; j++) aug[col][j] /= div;
+    for (let row = 0; row < n; row++) {
+      if (row === col) continue;
+      const factor = aug[row][col];
+      for (let j = 0; j < 2 * n; j++) aug[row][j] -= factor * aug[col][j];
+    }
+  }
+  return aug.map(row => row.slice(n));
+}
+
+// Approximation p-value F (Abramowitz & Stegun)
+function fPvalue(F, d1, d2) {
+  if (!isFinite(F) || F < 0) return 1;
+  const x = d2 / (d2 + d1 * F);
+  return incompleteBeta(x, d2 / 2, d1 / 2);
+}
+
+function tPvalue(t, df) {
+  if (!isFinite(t)) return 1;
+  const x = df / (df + t * t);
+  return incompleteBeta(x, df / 2, 0.5);
+}
+
+function incompleteBeta(x, a, b) {
+  if (x <= 0) return 0;
+  if (x >= 1) return 1;
+  const lbeta = lgamma(a) + lgamma(b) - lgamma(a + b);
+  const front = Math.exp(Math.log(x) * a + Math.log(1 - x) * b - lbeta) / a;
+  return front * betaCF(x, a, b);
+}
+
+function lgamma(x) {
+  const c = [76.18009172947146,-86.50532032941677,24.01409824083091,-1.231739572450155,1.208650973866179e-3,-5.395239384953e-6];
+  let y = x, tmp = x + 5.5;
+  tmp -= (x + 0.5) * Math.log(tmp);
+  let ser = 1.000000000190015;
+  for (let j = 0; j < 6; j++) { y++; ser += c[j] / y; }
+  return -tmp + Math.log(2.5066282746310005 * ser / x);
+}
+
+function betaCF(x, a, b) {
+  const MAXIT = 200, EPS = 3e-7;
+  const qab = a + b, qap = a + 1, qam = a - 1;
+  let c = 1, d = 1 - qab * x / qap;
+  if (Math.abs(d) < 1e-30) d = 1e-30;
+  d = 1 / d; let h = d;
+  for (let m = 1; m <= MAXIT; m++) {
+    const m2 = 2 * m;
+    let aa = m * (b - m) * x / ((qam + m2) * (a + m2));
+    d = 1 + aa * d; if (Math.abs(d) < 1e-30) d = 1e-30;
+    c = 1 + aa / c; if (Math.abs(c) < 1e-30) c = 1e-30;
+    d = 1 / d; h *= d * c;
+    aa = -(a + m) * (qab + m) * x / ((a + m2) * (qap + m2));
+    d = 1 + aa * d; if (Math.abs(d) < 1e-30) d = 1e-30;
+    c = 1 + aa / c; if (Math.abs(c) < 1e-30) c = 1e-30;
+    d = 1 / d; const del = d * c; h *= del;
+    if (Math.abs(del - 1) < EPS) break;
+  }
+  return h;
+}
+
+function sigStars(p) {
+  if (p === null || p === undefined) return "";
+  if (p < 0.001) return "***";
+  if (p < 0.01) return "**";
+  if (p < 0.05) return "*";
+  if (p < 0.1) return "·";
+  return "";
+}
+
+function fmt(v, d = 4) {
+  if (v === null || v === undefined || !isFinite(v)) return "—";
+  return v.toFixed(d);
+}
+
+function fmtP(p) {
+  if (p === null || p === undefined) return "—";
+  if (p < 0.001) return "< 0.001";
+  return p.toFixed(3);
+}
+
+
+// ─── sous-composants partie 4 ────────────────────────────────────────────────
+
+function ResidualPlot({ yHat, residuals, color }) {
+  if (!yHat || yHat.length === 0) return null;
+  const W = 480, H = 220, PAD = 40;
+  const minX = Math.min(...yHat), maxX = Math.max(...yHat);
+  const minY = Math.min(...residuals), maxY = Math.max(...residuals);
+  const rangeX = maxX - minX || 1, rangeY = Math.max(Math.abs(minY), Math.abs(maxY)) * 2 || 1;
+  const cx = (v) => PAD + (v - minX) / rangeX * (W - 2 * PAD);
+  const cy = (v) => H / 2 - v / (rangeY / 2) * (H / 2 - PAD);
+  const dotColor = color === "bg-indigo-500" ? "#6366f1" : color === "bg-emerald-500" ? "#10b981" : "#f59e0b";
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 220 }}>
+      {/* Axes */}
+      <line x1={PAD} y1={H / 2} x2={W - PAD} y2={H / 2} stroke="#e5e7eb" strokeWidth="1" />
+      <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="#e5e7eb" strokeWidth="1" />
+      {/* Zéro label */}
+      <text x={PAD - 6} y={H / 2 + 4} textAnchor="end" fontSize="10" fill="#9ca3af">0</text>
+      {/* Points */}
+      {yHat.map((x, i) => (
+        <circle key={i} cx={cx(x)} cy={cy(residuals[i])} r="4" fill={dotColor} fillOpacity="0.8" />
+      ))}
+      {/* Labels axes */}
+      <text x={W / 2} y={H - 4} textAnchor="middle" fontSize="10" fill="#9ca3af">Ŷ</text>
+      <text x={8} y={H / 2} textAnchor="middle" fontSize="10" fill="#9ca3af" transform={`rotate(-90, 8, ${H/2})`}>Résidu</text>
+    </svg>
+  );
+}
+
+function IsoResponsePanel({ model, fit, factors, modelColors }) {
+  const [f1Idx, setF1Idx] = React.useState(0);
+  const [f2Idx, setF2Idx] = React.useState(1);
+  const [fixedVals, setFixedVals] = React.useState(() => {
+    const fv = {};
+    factors.forEach(f => { fv[f.id] = 0; });
+    return fv;
+  });
+
+  const contFactors = factors.filter(f => f.continuous);
+  const f1 = contFactors[f1Idx] || contFactors[0];
+  const f2 = contFactors[f2Idx] || contFactors[1];
+  if (!f1 || !f2 || f1.id === f2.id) return null;
+
+  const GRID = 60;
+  const W = 360, H = 360, PAD_L = 48, PAD_B = 36, PAD_T = 16, PAD_R = 16;
+  const PW = W - PAD_L - PAD_R;
+  const PH = H - PAD_T - PAD_B;
+
+  const toReal = (f, coded) => {
+    const mid = (f.low.real + f.high.real) / 2;
+    const half = (f.high.real - f.low.real) / 2;
+    return +(mid + coded * half).toFixed(2);
+  };
+
+  const predict = (c1, c2) => {
+    const coded = { ...fixedVals, [f1.id]: c1, [f2.id]: c2 };
+    let y = fit.coeffs[0];
+    model.terms.forEach((t, i) => {
+      let val;
+      if (isQuadPure(t, factors)) {
+        const f = factors.find(fac => t === quadPureTerm(fac.id));
+        val = (coded[f.id] ?? 0) ** 2;
+      } else {
+        val = factors.filter(fac => t.includes(fac.id)).reduce((p, fac) => p * (coded[fac.id] ?? 0), 1);
+      }
+      y += fit.coeffs[i + 1] * val;
+    });
+    return y;
+  };
+
+  // Build grid
+  const xs = Array.from({ length: GRID }, (_, i) => -1 + i * 2 / (GRID - 1));
+  const ys = Array.from({ length: GRID }, (_, i) => -1 + i * 2 / (GRID - 1));
+  const grid = ys.map(y2 => xs.map(x1 => predict(x1, y2)));
+  const flat = grid.flat();
+  const minZ = Math.min(...flat), maxZ = Math.max(...flat);
+
+  // Choose ~6 iso levels evenly spaced
+  const nLevels = 6;
+  const levels = Array.from({ length: nLevels }, (_, i) => minZ + (i + 1) * (maxZ - minZ) / (nLevels + 1));
+
+  // Marching squares — extract iso-contour segments for a given level
+  function marchingSquares(level) {
+    const segs = [];
+    const lerp = (a, b, va, vb) => a + (b - a) * (level - va) / (vb - va);
+    for (let j = 0; j < GRID - 1; j++) {
+      for (let i = 0; i < GRID - 1; i++) {
+        const v00 = grid[j][i];
+        const v10 = grid[j][i + 1];
+        const v01 = grid[j + 1][i];
+        const v11 = grid[j + 1][i + 1];
+        const idx = (v00 >= level ? 8 : 0) | (v10 >= level ? 4 : 0) | (v11 >= level ? 2 : 0) | (v01 >= level ? 1 : 0);
+        if (idx === 0 || idx === 15) continue;
+        // Edge midpoints (fractional grid indices)
+        const top    = [lerp(i, i + 1, v00, v10), j];
+        const right  = [i + 1, lerp(j, j + 1, v10, v11)];
+        const bottom = [lerp(i, i + 1, v01, v11), j + 1];
+        const left   = [i, lerp(j, j + 1, v00, v01)];
+        const lines = {
+          1: [left, bottom], 2: [bottom, right], 3: [left, right],
+          4: [right, top], 5: [left, top, right, bottom],
+          6: [bottom, top], 7: [left, top],
+          8: [top, left], 9: [top, bottom], 10: [right, bottom, left, top],
+          11: [top, right], 12: [right, left], 13: [bottom, left], 14: [right, bottom],
+        };
+        const pts = lines[idx];
+        if (!pts) continue;
+        if (pts.length === 2) segs.push([pts[0], pts[1]]);
+        else segs.push([pts[0], pts[1]], [pts[2], pts[3]]);
+      }
+    }
+    return segs;
+  }
+
+  // Convert grid index to SVG coords
+  const gx = (gi) => PAD_L + (gi / (GRID - 1)) * PW;
+  const gy = (gj) => PAD_T + (1 - gj / (GRID - 1)) * PH;
+
+  // Label position: find middle segment of contour for a level
+  function labelPos(segs) {
+    if (segs.length === 0) return null;
+    const mid = segs[Math.floor(segs.length / 2)];
+    return { x: (gx(mid[0][0]) + gx(mid[1][0])) / 2, y: (gy(mid[0][1]) + gy(mid[1][1])) / 2 };
+  }
+
+  const lineColors = ["#3b82f6","#6366f1","#8b5cf6","#a855f7","#ec4899","#ef4444"];
+
+  // Axis ticks
+  const ticks = [-1, -0.5, 0, 0.5, 1];
+
+  return (
+    <div className={`bg-white dark:bg-gray-900 border-2 ${modelColors.border} rounded-xl p-5`}>
+      <div className="flex items-center gap-2 mb-4">
+        <span className={`size-2.5 rounded-full ${modelColors.dot}`} />
+        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{model.name} — Courbes isoréponses</h3>
+      </div>
+
+      {/* Sélecteurs axes */}
+      <div className="flex flex-wrap gap-4 mb-4">
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500">Axe X :</label>
+          <select value={f1Idx} onChange={e => setF1Idx(+e.target.value)}
+            className="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            {contFactors.map((f, i) => <option key={f.id} value={i} disabled={i === f2Idx}>{f.id} — {f.name}</option>)}
+          </select>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-xs text-gray-500">Axe Y :</label>
+          <select value={f2Idx} onChange={e => setF2Idx(+e.target.value)}
+            className="rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-2 py-1 text-xs text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            {contFactors.map((f, i) => <option key={f.id} value={i} disabled={i === f1Idx}>{f.id} — {f.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      {/* Valeurs fixes des autres facteurs */}
+      {factors.filter(f => f.continuous && f.id !== f1.id && f.id !== f2.id).length > 0 && (
+        <div className="flex flex-wrap gap-3 mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+          <p className="w-full text-[11px] text-gray-400 font-medium mb-1">Autres facteurs (niveau codé fixé) :</p>
+          {factors.filter(f => f.continuous && f.id !== f1.id && f.id !== f2.id).map(f => (
+            <div key={f.id} className="flex items-center gap-2">
+              <label className="text-xs text-gray-500">{f.id} :</label>
+              <input type="range" min="-1" max="1" step="0.1" value={fixedVals[f.id] ?? 0}
+                onChange={e => setFixedVals(prev => ({ ...prev, [f.id]: +e.target.value }))}
+                className="w-20" />
+              <span className="text-xs font-mono text-gray-600 dark:text-gray-300 w-8">{(fixedVals[f.id] ?? 0).toFixed(1)}</span>
+              <span className="text-[10px] text-gray-400">({toReal(f, fixedVals[f.id] ?? 0)} {f.unit})</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* SVG isoréponses */}
+      <div className="overflow-x-auto">
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="font-mono" style={{ background: "var(--tw-bg-opacity, white)", overflow: "visible" }}>
+          {/* Zone de tracé */}
+          <rect x={PAD_L} y={PAD_T} width={PW} height={PH} fill="#f9fafb" stroke="#e5e7eb" strokeWidth="0.5" />
+
+          {/* Grille légère */}
+          {ticks.map(v => {
+            const px = PAD_L + (v + 1) / 2 * PW;
+            const py = PAD_T + (1 - (v + 1) / 2) * PH;
+            return (
+              <g key={v}>
+                <line x1={px} y1={PAD_T} x2={px} y2={PAD_T + PH} stroke="#e5e7eb" strokeWidth="0.5" strokeDasharray="3,3" />
+                <line x1={PAD_L} y1={py} x2={PAD_L + PW} y2={py} stroke="#e5e7eb" strokeWidth="0.5" strokeDasharray="3,3" />
+              </g>
+            );
+          })}
+
+          {/* Courbes isoréponses */}
+          <clipPath id="plotClip">
+            <rect x={PAD_L} y={PAD_T} width={PW} height={PH} />
+          </clipPath>
+          <g clipPath="url(#plotClip)">
+            {levels.map((level, li) => {
+              const segs = marchingSquares(level);
+              const color = lineColors[li % lineColors.length];
+              const lpos = labelPos(segs);
+              return (
+                <g key={li}>
+                  {segs.map(([p0, p1], si) => (
+                    <line key={si}
+                      x1={gx(p0[0])} y1={gy(p0[1])}
+                      x2={gx(p1[0])} y2={gy(p1[1])}
+                      stroke={color} strokeWidth="1.5" strokeLinecap="round" />
+                  ))}
+                  {lpos && (
+                    <g>
+                      <rect x={lpos.x - 14} y={lpos.y - 7} width={28} height={13} rx="2" fill="white" fillOpacity="0.85" />
+                      <text x={lpos.x} y={lpos.y + 4} textAnchor="middle" fontSize="8" fontWeight="600" fill={color}>
+                        {level.toFixed(1)}
+                      </text>
+                    </g>
+                  )}
+                </g>
+              );
+            })}
+          </g>
+
+          {/* Ticks axe X (valeurs réelles) */}
+          {ticks.map(v => {
+            const px = PAD_L + (v + 1) / 2 * PW;
+            return (
+              <g key={v}>
+                <line x1={px} y1={PAD_T + PH} x2={px} y2={PAD_T + PH + 4} stroke="#9ca3af" strokeWidth="0.8" />
+                <text x={px} y={PAD_T + PH + 14} textAnchor="middle" fontSize="9" fill="#9ca3af">{toReal(f1, v)}</text>
+              </g>
+            );
+          })}
+
+          {/* Ticks axe Y (valeurs réelles) */}
+          {ticks.map(v => {
+            const py = PAD_T + (1 - (v + 1) / 2) * PH;
+            return (
+              <g key={v}>
+                <line x1={PAD_L - 4} y1={py} x2={PAD_L} y2={py} stroke="#9ca3af" strokeWidth="0.8" />
+                <text x={PAD_L - 8} y={py + 3} textAnchor="end" fontSize="9" fill="#9ca3af">{toReal(f2, v)}</text>
+              </g>
+            );
+          })}
+
+          {/* Noms axes */}
+          <text x={PAD_L + PW / 2} y={H - 2} textAnchor="middle" fontSize="10" fill="#6b7280">
+            {f1.name}{f1.unit ? ` (${f1.unit})` : ""}
+          </text>
+          <text x={10} y={PAD_T + PH / 2} textAnchor="middle" fontSize="10" fill="#6b7280"
+            transform={`rotate(-90, 10, ${PAD_T + PH / 2})`}>
+            {f2.name}{f2.unit ? ` (${f2.unit})` : ""}
+          </text>
+        </svg>
+      </div>
+
+      {/* Légende niveaux */}
+      <div className="flex flex-wrap gap-3 mt-3">
+        {levels.map((level, li) => (
+          <div key={li} className="flex items-center gap-1.5">
+            <span className="inline-block w-6 h-0.5 rounded" style={{ background: lineColors[li % lineColors.length] }} />
+            <span className="text-[11px] font-mono text-gray-500">{level.toFixed(2)}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── composant principal ──────────────────────────────────────────────────────
 
 export default function PlanFactoriel() {
@@ -234,8 +716,20 @@ export default function PlanFactoriel() {
   const [centerPoint, setCenterPoint] = useState({ ...DEFAULT_CENTER });
   const [matrix, setMatrix] = useState(null);
   const [modelDefault, setModelDefault] = useState(() => computeDefaultModel(DEFAULT_FACTORS));
-  const [modelActive, setModelActive] = useState(() => computeDefaultModel(DEFAULT_FACTORS));
-  const [modelPreset, setModelPreset] = useState("default");
+  // Multi-modèles : tableau de { id, name, terms, preset }
+  const [models, setModels] = useState(() => {
+    const def = computeDefaultModel(DEFAULT_FACTORS);
+    return [{ id: 1, name: "Modèle 1", terms: [...def], preset: "default" }];
+  });
+  const [activeModelId, setActiveModelId] = useState(1);
+  const [part4Tab, setPart4Tab] = useState("coefficients");
+  const [part4Response, setPart4Response] = useState(0); // index de la réponse active
+  const [excludedPoints, setExcludedPoints] = useState(new Set()); // indices des points exclus
+  // Compat legacy pour le reste du composant
+  const modelActive = models.find(m => m.id === activeModelId)?.terms || [];
+  const modelPreset = models.find(m => m.id === activeModelId)?.preset || "default";
+  const setModelActive = (terms) => setModels(ms => ms.map(m => m.id === activeModelId ? { ...m, terms } : m));
+  const setModelPreset = (preset) => setModels(ms => ms.map(m => m.id === activeModelId ? { ...m, preset } : m));
   const [addRowLevels, setAddRowLevels] = useState(null);
   const [showRandomDialog, setShowRandomDialog] = useState(false);
   const [showRandomDone, setShowRandomDone] = useState(false);
@@ -261,8 +755,8 @@ export default function PlanFactoriel() {
       setResponses(r);
       setCenterPoint(cp);
       setModelDefault(md);
-      setModelActive([...md]);
-      setModelPreset("default");
+      setModels([{ id: 1, name: "Modèle 1", terms: [...md], preset: "default" }]);
+      setActiveModelId(1);
       setMatrix(m);
       setLoadedExampleId(ex.file);
       setSidebarOpen(false);
@@ -278,8 +772,8 @@ export default function PlanFactoriel() {
     setCenterPoint({ ...DEFAULT_CENTER });
     const def = computeDefaultModel(DEFAULT_FACTORS);
     setModelDefault(def);
-    setModelActive([...def]);
-    setModelPreset("default");
+    setModels([{ id: 1, name: "Modèle 1", terms: [...def], preset: "default" }]);
+    setActiveModelId(1);
     setMatrix(null);
     setLoadedExampleId(null);
     setEditMode(false);
@@ -300,8 +794,8 @@ export default function PlanFactoriel() {
       setResponses(r);
       setCenterPoint(cp);
       setModelDefault(md);
-      setModelActive([...md]);
-      setModelPreset("default");
+      setModels([{ id: 1, name: "Modèle 1", terms: [...md], preset: "default" }]);
+      setActiveModelId(1);
       setMatrix(m);
       setLoadedExampleId(ex.file);
       setEditMeta({
@@ -381,8 +875,8 @@ export default function PlanFactoriel() {
         setResponses(r);
         setCenterPoint(cp);
         setModelDefault(md);
-        setModelActive([...md]);
-        setModelPreset("default");
+        setModels([{ id: 1, name: "Modèle 1", terms: [...md], preset: "default" }]);
+        setActiveModelId(1);
         setMatrix(m);
         setLoadedExampleId(file.name);
         setSidebarOpen(false);
@@ -446,20 +940,20 @@ export default function PlanFactoriel() {
   };
 
   const buildMatrix = () => {
-    // Si une matrice a déjà été chargée depuis un exemple, on la conserve
-    // Sinon on génère une matrice vide
     const m = matrix || genMatrix(factors, responses, centerPoint);
     const def = computeDefaultModel(factors);
     setMatrix(m);
     setModelDefault(def);
-    setModelActive([...def]);
-    setModelPreset("default");
+    setModels([{ id: 1, name: "Modèle 1", terms: [...def], preset: "default" }]);
+    setActiveModelId(1);
     setPart(2);
   };
 
   const recompModel = (f) => {
     const def = computeDefaultModel(f);
-    setModelDefault(def); setModelActive([...def]); setModelPreset("default");
+    setModelDefault(def);
+    setModels([{ id: 1, name: "Modèle 1", terms: [...def], preset: "default" }]);
+    setActiveModelId(1);
     setMatrix(null);
   };
 
@@ -749,6 +1243,7 @@ export default function PlanFactoriel() {
             { n: 1, id: "01", l: "Facteurs & réponses" },
             { n: 2, id: "02", l: "Matrice" },
             { n: 3, id: "03", l: "Modèle" },
+            { n: 4, id: "04", l: "Modélisation" },
           ].map((s, i, arr) => {
             const status = part > s.n ? "complete" : part === s.n ? "current" : "upcoming";
             return (
@@ -1247,134 +1742,686 @@ export default function PlanFactoriel() {
       )}
 
       {/* ══════════════════════════════════════════════════════ PARTIE 3 */}
-      {part === 3 && (
-        <>
-          {/* Dialog cubique impossible */}
-          <Dialog open={showCubicDialog} onClose={setShowCubicDialog} className="relative z-50">
-            <DialogBackdrop transition className="fixed inset-0 bg-gray-900/50 transition-opacity data-closed:opacity-0" />
-            <div className="fixed inset-0 z-10 flex items-center justify-center p-4">
-              <DialogPanel transition className="w-full max-w-sm rounded-xl bg-white dark:bg-gray-900 p-6 shadow-xl text-center transition-all data-closed:opacity-0 data-closed:scale-95">
-                <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
-                  <ExclamationTriangleIcon className="size-6 text-red-600 dark:text-red-400" />
-                </div>
-                <DialogTitle className="text-base font-semibold text-gray-900 dark:text-white mb-2">Modèle impossible</DialogTitle>
-                <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">
-                  Le modèle cubique (ordre 3) nécessite au moins 3 facteurs.
-                </p>
-                <button onClick={() => setShowCubicDialog(false)}
-                  className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">
-                  Fermer
-                </button>
-              </DialogPanel>
-            </div>
-          </Dialog>
+      {part === 3 && (() => {
+        const nRuns = matrix ? matrix.length : 0;
+        const maxTerms = nRuns - 1; // constante comprise = nRuns, donc termes hors constante = nRuns-1
+        const activeModel = models.find(m => m.id === activeModelId);
 
-          <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-4">
-            <div className="flex items-center justify-between mb-4">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">Modèle de régression</p>
-              {!isDefaultModel && (
-                <button onClick={resetModel}
-                  className="flex items-center gap-1.5 rounded-md border border-gray-200 dark:border-gray-700 px-2.5 py-1 text-xs text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                  <ArrowPathIcon className="size-3.5" /> Défaut JSON
+        const addModel = () => {
+          if (models.length >= 3) return;
+          const newId = Math.max(...models.map(m => m.id)) + 1;
+          setModels([...models, { id: newId, name: `Modèle ${newId}`, terms: [...modelDefault], preset: "default" }]);
+          setActiveModelId(newId);
+        };
+
+        const deleteModel = (id) => {
+          if (models.length <= 1) return;
+          const remaining = models.filter(m => m.id !== id);
+          setModels(remaining);
+          if (activeModelId === id) setActiveModelId(remaining[0].id);
+        };
+
+        const renameModel = (id, name) => setModels(ms => ms.map(m => m.id === id ? { ...m, name } : m));
+
+        const applyPresetTo = (id, p) => {
+          if (p === "cubic" && factors.length < 3) { setShowCubicDialog(true); return; }
+          const terms = computePresetModel(p, factors, modelDefault);
+          setModels(ms => ms.map(m => m.id === id ? { ...m, terms, preset: p } : m));
+        };
+
+        const toggleTermFor = (id, t) => {
+          const m = models.find(x => x.id === id);
+          if (!m) return;
+          const has = m.terms.includes(t);
+          // Si on ajoute : vérifier contrainte
+          if (!has && m.terms.length >= maxTerms) return;
+          const terms = has ? m.terms.filter(x => x !== t) : [...m.terms, t];
+          setModels(ms => ms.map(x => x.id === id ? { ...x, terms, preset: "custom" } : x));
+        };
+
+        const resetModelTo = (id) => setModels(ms => ms.map(m => m.id === id ? { ...m, terms: [...modelDefault], preset: "default" } : m));
+
+        const modelColors = [
+          { border: "border-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-900/20", text: "text-indigo-700 dark:text-indigo-300", tab: "bg-indigo-600", dot: "bg-indigo-500" },
+          { border: "border-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-700 dark:text-emerald-300", tab: "bg-emerald-600", dot: "bg-emerald-500" },
+          { border: "border-amber-500", bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-700 dark:text-amber-300", tab: "bg-amber-500", dot: "bg-amber-500" },
+        ];
+
+        return (
+          <>
+            {/* Dialog cubique impossible */}
+            <Dialog open={showCubicDialog} onClose={setShowCubicDialog} className="relative z-50">
+              <DialogBackdrop transition className="fixed inset-0 bg-gray-900/50 transition-opacity data-closed:opacity-0" />
+              <div className="fixed inset-0 z-10 flex items-center justify-center p-4">
+                <DialogPanel transition className="w-full max-w-sm rounded-xl bg-white dark:bg-gray-900 p-6 shadow-xl text-center transition-all data-closed:opacity-0 data-closed:scale-95">
+                  <div className="mx-auto mb-4 flex size-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+                    <ExclamationTriangleIcon className="size-6 text-red-600 dark:text-red-400" />
+                  </div>
+                  <DialogTitle className="text-base font-semibold text-gray-900 dark:text-white mb-2">Modèle impossible</DialogTitle>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Le modèle cubique (ordre 3) nécessite au moins 3 facteurs.</p>
+                  <button onClick={() => setShowCubicDialog(false)} className="w-full rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">Fermer</button>
+                </DialogPanel>
+              </div>
+            </Dialog>
+
+            {/* En-tête : onglets modèles + bouton ajouter */}
+            <div className="flex items-center gap-2 mb-4 flex-wrap">
+              {models.map((m, mi) => {
+                const col = modelColors[mi % modelColors.length];
+                const isActive = m.id === activeModelId;
+                return (
+                  <button key={m.id} onClick={() => setActiveModelId(m.id)}
+                    className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium transition-all ${isActive ? `${col.border} ${col.bg} ${col.text}` : "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300 dark:hover:border-gray-600"}`}>
+                    <span className={`size-2 rounded-full ${col.dot}`} />
+                    {m.name}
+                    <span className="text-[11px] opacity-60">({m.terms.length + 1} termes)</span>
+                  </button>
+                );
+              })}
+              {models.length < 3 && (
+                <button onClick={addModel}
+                  className="flex items-center gap-1.5 rounded-lg border border-dashed border-gray-300 dark:border-gray-600 px-3 py-2 text-sm text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:border-gray-400 transition-colors">
+                  <PlusIcon className="size-4" /> Ajouter un modèle
                 </button>
               )}
             </div>
 
-            <div className="flex flex-wrap gap-2 mb-4">
-              {[
-                { id: "linear", label: "Linéaire (ordre 1)" },
-                { id: "synergie", label: "Synergie (ordre 1+2)" },
-                { id: "quadratic", label: "Quadratique (ordre 2)" },
-                { id: "cubic", label: "Cubique (ordre 3)" },
-                { id: "default", label: "Défaut (JSON)" },
-              ].map(p => (
-                <button key={p.id} onClick={() => applyPreset(p.id)}
-                  className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
-                    modelPreset === p.id
-                      ? "bg-indigo-600 border-indigo-600 text-white"
-                      : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
-                  }`}>
-                  {p.label}
-                </button>
-              ))}
-            </div>
+            {/* Carte du modèle actif */}
+            {activeModel && (() => {
+              const mi = models.findIndex(m => m.id === activeModelId);
+              const col = modelColors[mi % modelColors.length];
+              const isDefault = JSON.stringify([...activeModel.terms].sort()) === JSON.stringify([...modelDefault].sort());
+              const atLimit = activeModel.terms.length >= maxTerms;
 
-            <div className="h-px bg-gray-100 dark:bg-gray-800 mb-4" />
-
-            <div className="mb-3">
-              <span className="inline-flex items-center rounded-full bg-purple-100 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 px-3 py-1 text-xs font-mono font-semibold text-purple-700 dark:text-purple-300 mr-2">α₀</span>
-              <span className="text-xs text-gray-400">constante — toujours incluse</span>
-            </div>
-
-            {orderedKeys.map(order => (
-              <div key={order} className="mb-3">
-                <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">{orderLabels[order]}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {byOrder[order].map(t => {
-                    const isOn = modelActive.includes(t);
-                    return (
-                      <button key={t} onClick={() => toggleTerm(t)}
-                        title={modelDefault.includes(t) ? "Présent dans le modèle par défaut" : ""}
-                        className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-mono font-medium transition-all ${
-                          isOn
-                            ? "bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-600 text-emerald-700 dark:text-emerald-300"
-                            : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 opacity-50 line-through"
-                        }`}>
-                        {formatTermDisplay(t, factors)}
+              return (
+                <div className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5 mb-4`}>
+                  {/* Header modèle */}
+                  <div className="flex items-center justify-between mb-4 gap-3">
+                    <input value={activeModel.name} onChange={e => renameModel(activeModel.id, e.target.value)}
+                      className="text-sm font-semibold bg-transparent border-b border-transparent hover:border-gray-300 dark:hover:border-gray-600 focus:outline-none focus:border-indigo-400 text-gray-900 dark:text-white w-40 transition-colors" />
+                    <div className="flex items-center gap-2">
+                      {!isDefault && (
+                        <button onClick={() => resetModelTo(activeModel.id)}
+                          className="flex items-center gap-1 rounded-md border border-gray-200 dark:border-gray-700 px-2 py-1 text-xs text-gray-500 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                          <ArrowPathIcon className="size-3" /> Défaut
+                        </button>
+                      )}
+                      <button onClick={() => deleteModel(activeModel.id)} disabled={models.length <= 1}
+                        className="p-1.5 rounded-md text-red-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                        title={models.length <= 1 ? "Au moins un modèle requis" : "Supprimer ce modèle"}>
+                        <TrashIcon className="size-4" />
                       </button>
-                    );
-                  })}
+                    </div>
+                  </div>
+
+                  {/* Presets */}
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {[
+                      { id: "linear", label: "Linéaire" },
+                      { id: "synergie", label: "Synergie" },
+                      { id: "quadratic", label: "Quadratique" },
+                      { id: "cubic", label: "Cubique" },
+                      { id: "default", label: "Défaut JSON" },
+                    ].map(p => (
+                      <button key={p.id} onClick={() => applyPresetTo(activeModel.id, p.id)}
+                        className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
+                          activeModel.preset === p.id
+                            ? `${col.tab} border-transparent text-white`
+                            : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800"
+                        }`}>
+                        {p.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Contrainte */}
+                  {atLimit && (
+                    <div className="flex items-center gap-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2 mb-3">
+                      <ExclamationTriangleIcon className="size-4 text-amber-500 shrink-0" />
+                      <span className="text-xs text-amber-700 dark:text-amber-300">
+                        Maximum atteint : {nRuns} essais → max {maxTerms} termes + constante.
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="h-px bg-gray-100 dark:bg-gray-800 mb-3" />
+
+                  {/* Constante */}
+                  <div className="mb-3">
+                    <span className="inline-flex items-center rounded-full bg-purple-100 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-700 px-3 py-1 text-xs font-mono font-semibold text-purple-700 dark:text-purple-300 mr-2">α₀</span>
+                    <span className="text-xs text-gray-400">constante — toujours incluse</span>
+                  </div>
+
+                  {/* Termes par groupe */}
+                  {orderedKeys.map(order => (
+                    <div key={order} className="mb-3">
+                      <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">{orderLabels[order]}</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {byOrder[order].map(t => {
+                          const isOn = activeModel.terms.includes(t);
+                          const wouldExceed = !isOn && atLimit;
+                          return (
+                            <button key={t} onClick={() => !wouldExceed && toggleTermFor(activeModel.id, t)}
+                              title={wouldExceed ? "Limite atteinte" : modelDefault.includes(t) ? "Dans le modèle par défaut" : ""}
+                              className={`inline-flex items-center rounded-full border px-3 py-1 text-xs font-mono font-medium transition-all ${
+                                isOn
+                                  ? `bg-emerald-50 dark:bg-emerald-900/30 border-emerald-300 dark:border-emerald-600 text-emerald-700 dark:text-emerald-300`
+                                  : wouldExceed
+                                    ? "bg-gray-50 dark:bg-gray-800 border-gray-100 dark:border-gray-800 text-gray-300 dark:text-gray-700 cursor-not-allowed"
+                                    : "bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700 text-gray-400 dark:text-gray-500 opacity-50 line-through hover:opacity-70"
+                              }`}>
+                              {formatTermDisplay(t, factors)}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+
+                  <div className="h-px bg-gray-100 dark:bg-gray-800 mt-4 mb-3" />
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-gray-400">Termes actifs :</span>
+                    <strong className="text-sm text-gray-700 dark:text-gray-200">{activeModel.terms.length + 1}</strong>
+                    <span className="text-xs text-gray-400">/ {nRuns} essais</span>
+                    {!isDefault
+                      ? <span className="rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">Modifié</span>
+                      : <span className="rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">Défaut JSON</span>
+                    }
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Équations de tous les modèles */}
+            <div className="grid gap-3 mb-4" style={{ gridTemplateColumns: `repeat(${models.length}, minmax(0, 1fr))` }}>
+              {models.map((m, mi) => {
+                const col = modelColors[mi % modelColors.length];
+                return (
+                  <div key={m.id} className={`bg-gray-50 dark:bg-gray-800/50 border ${col.border} rounded-xl p-4`}>
+                    <p className={`text-[11px] font-semibold uppercase tracking-widest mb-2 ${col.text}`}>{m.name}</p>
+                    <div className="font-mono text-xs text-gray-700 dark:text-gray-200 leading-loose">
+                      <span>Ŷ = α₀</span>
+                      {m.terms.map(t => (
+                        <span key={t}> + α<sub>{termSubScript(t, factors)}</sub>·<span dangerouslySetInnerHTML={{ __html: formatTermHTML(t, factors) }} /></span>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="flex items-center justify-between mt-4">
+              <button onClick={() => goTo(2)}
+                className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                ← Retour
+              </button>
+              <div className="flex items-center gap-3">
+                {editMode && (
+                  <button onClick={exportJSON}
+                    className="flex items-center gap-1.5 rounded-md border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
+                      <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V12a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 1.414L10 16.414l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                    Exporter JSON
+                  </button>
+                )}
+                <button onClick={() => setPart(4)} className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">
+                  Continuer → ({models.length} modèle{models.length > 1 ? "s" : ""})
+                </button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
+
+      {/* ══════════════════════════════════════════════════════ PARTIE 4 */}
+      {part === 4 && (() => {
+        const TABS = [
+          { id: "coefficients", label: "Coefficients" },
+          { id: "residus", label: "Résidus" },
+          { id: "anova", label: "ANOVA & Validation" },
+          { id: "effets", label: "Effets (Pareto)" },
+          { id: "isoresponse", label: "Isoréponses" },
+        ];
+
+        const modelColors = [
+          { border: "border-indigo-500", bg: "bg-indigo-50 dark:bg-indigo-900/20", text: "text-indigo-600 dark:text-indigo-300", badge: "bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300", dot: "bg-indigo-500" },
+          { border: "border-emerald-500", bg: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-600 dark:text-emerald-300", badge: "bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300", dot: "bg-emerald-500" },
+          { border: "border-amber-500", bg: "bg-amber-50 dark:bg-amber-900/20", text: "text-amber-600 dark:text-amber-300", badge: "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300", dot: "bg-amber-500" },
+        ];
+
+        const activeResp = responses[part4Response] || responses[0];
+        const yValues = (matrix || []).map(row => {
+          const v = row.responses[activeResp.id];
+          return v === "" || v === null || v === undefined ? null : +v;
+        });
+        // Tous les points valides (réponse renseignée), avant exclusion
+        const allValidRows = (matrix || []).map((row, i) => ({ row, i, y: yValues[i] })).filter(x => x.y !== null);
+        // Points valides ET non exclus → utilisés pour le calcul
+        const activeRows = allValidRows.filter(x => !excludedPoints.has(x.i));
+        const validRows = activeRows.map(x => x.row);
+        const validY = activeRows.map(x => x.y);
+
+        // Toggle exclusion d'un point (avec contrainte min)
+        const toggleExclude = (globalIdx, modelTermsCount) => {
+          const minRequired = modelTermsCount + 2; // p+1 degrés de liberté résidus
+          setExcludedPoints(prev => {
+            const next = new Set(prev);
+            if (next.has(globalIdx)) {
+              next.delete(globalIdx);
+            } else {
+              // Vérifier que le nombre de points restants sera suffisant pour le modèle le plus grand
+              const maxTerms = Math.max(...models.map(m => m.terms.length));
+              const wouldRemain = allValidRows.length - next.size - 1;
+              if (wouldRemain < maxTerms + 2) return prev; // refus
+              next.add(globalIdx);
+            }
+            return next;
+          });
+        };
+
+        // Calcul OLS pour chaque modèle (sur points actifs)
+        const fits = models.map(m => {
+          if (validRows.length < m.terms.length + 2) return null;
+          return fitOLS(m.terms, validRows, validY, factors);
+        });
+
+        // Noms des termes (constante + termes du modèle)
+        const termLabel = (t) => formatTermDisplay(t, factors);
+        const allTermLabels = (terms) => ["α₀ (constante)", ...terms.map(t => `α${termSubScript(t, factors)} · ${termLabel(t)}`)];
+
+        return (
+          <>
+            {/* Sélecteur réponse si plusieurs */}
+            {responses.length > 1 && (
+              <div className="flex items-center gap-3 mb-4">
+                <span className="text-xs text-gray-500 dark:text-gray-400">Réponse :</span>
+                <div className="flex gap-2">
+                  {responses.map((r, i) => (
+                    <button key={r.id} onClick={() => setPart4Response(i)}
+                      className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${i === part4Response ? "bg-indigo-600 border-indigo-600 text-white" : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800"}`}>
+                      {r.id} — {r.name}{r.unit ? ` (${r.unit})` : ""}
+                    </button>
+                  ))}
                 </div>
               </div>
-            ))}
+            )}
 
-            <div className="h-px bg-gray-100 dark:bg-gray-800 mt-4 mb-3" />
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-gray-400">Termes actifs :</span>
-              <strong className="text-sm text-gray-700 dark:text-gray-200">{modelActive.length + 1}</strong>
-              <span className="text-xs text-gray-400">(+ constante)</span>
-              {!isDefaultModel
-                ? <span className="rounded-full bg-amber-100 dark:bg-amber-900/30 px-2 py-0.5 text-[10px] font-semibold text-amber-700 dark:text-amber-300">Modifié</span>
-                : <span className="rounded-full bg-emerald-100 dark:bg-emerald-900/30 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:text-emerald-300">Défaut JSON</span>
-              }
+            {/* Tabs */}
+            <div className="mb-4">
+              <div className="grid grid-cols-1 sm:hidden">
+                <select value={part4Tab} onChange={e => setPart4Tab(e.target.value)}
+                  className="col-start-1 row-start-1 w-full appearance-none rounded-md bg-white py-2 pr-8 pl-3 text-base text-gray-900 outline-1 -outline-offset-1 outline-gray-300 focus:outline-2 focus:-outline-offset-2 focus:outline-indigo-600 dark:bg-gray-800/50 dark:text-gray-100 dark:outline-white/10 dark:focus:outline-indigo-500">
+                  {TABS.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
+                </select>
+                <ChevronDownIcon aria-hidden="true" className="pointer-events-none col-start-1 row-start-1 mr-2 size-5 self-center justify-self-end fill-gray-500 dark:fill-gray-400" />
+              </div>
+              <div className="hidden sm:block">
+                <nav aria-label="Tabs" className="flex space-x-1">
+                  {TABS.map(t => (
+                    <button key={t.id} onClick={() => setPart4Tab(t.id)}
+                      className={`rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+                        t.id === part4Tab
+                          ? "bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300"
+                          : "text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      }`}>
+                      {t.label}
+                    </button>
+                  ))}
+                </nav>
+              </div>
             </div>
-          </div>
 
-          {/* Équation */}
-          <div className="bg-gray-50 dark:bg-gray-800/50 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Équation</p>
-            <div className="font-mono text-sm text-gray-700 dark:text-gray-200 leading-loose">
-              <span>Ŷ = α₀</span>
-              {modelActive.map(t => (
-                <span key={t}>
-                  {" "}+ α<sub>{termSubScript(t, factors)}</sub>·<span dangerouslySetInnerHTML={{ __html: formatTermHTML(t, factors) }} />
-                </span>
-              ))}
-            </div>
-          </div>
+            {/* ── TAB : COEFFICIENTS ── */}
+            {part4Tab === "coefficients" && (
+              <div className="space-y-4">
+                {models.map((m, mi) => {
+                  const fit = fits[mi];
+                  const col = modelColors[mi % modelColors.length];
+                  const labels = allTermLabels(m.terms);
+                  return (
+                    <div key={m.id} className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5`}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className={`size-2.5 rounded-full ${col.dot}`} />
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{m.name}</h3>
+                        {fit && (
+                          <span className={`ml-auto rounded-full px-2 py-0.5 text-[11px] font-semibold ${col.badge}`}>
+                            R² = {fmt(fit.R2, 4)} · R²adj = {fmt(fit.R2adj, 4)}
+                          </span>
+                        )}
+                      </div>
+                      {!fit ? (
+                        <p className="text-sm text-red-500">Impossible de calculer — vérifiez que toutes les réponses sont renseignées et que le nombre d'essais est suffisant.</p>
+                      ) : (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="border-b border-gray-100 dark:border-gray-800">
+                                <th className="text-left text-[11px] font-medium text-gray-400 pb-2 px-2">Terme</th>
+                                <th className="text-right text-[11px] font-medium text-gray-400 pb-2 px-2">Estimation</th>
+                                <th className="text-right text-[11px] font-medium text-gray-400 pb-2 px-2">Écart-type</th>
+                                <th className="text-right text-[11px] font-medium text-gray-400 pb-2 px-2">t ratio</th>
+                                <th className="text-right text-[11px] font-medium text-gray-400 pb-2 px-2">Prob &gt; |t|</th>
+                                <th className="text-center text-[11px] font-medium text-gray-400 pb-2 px-2">Sig.</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {fit.coeffs.map((c, ci) => {
+                                const p = fit.pCoeffs[ci];
+                                const sig = sigStars(p);
+                                const isSignif = p !== null && p < 0.05;
+                                return (
+                                  <tr key={ci} className={`border-b border-gray-50 dark:border-gray-800/50 last:border-0 ${isSignif ? "bg-indigo-50/30 dark:bg-indigo-900/10" : ""}`}>
+                                    <td className="px-2 py-1.5 font-mono text-gray-700 dark:text-gray-200">{labels[ci]}</td>
+                                    <td className="px-2 py-1.5 text-right font-mono font-semibold text-gray-900 dark:text-white">{fmt(c)}</td>
+                                    <td className="px-2 py-1.5 text-right font-mono text-gray-500">{fmt(fit.seCoeffs[ci])}</td>
+                                    <td className="px-2 py-1.5 text-right font-mono text-gray-500">{fmt(fit.tStats[ci], 3)}</td>
+                                    <td className={`px-2 py-1.5 text-right font-mono ${isSignif ? "text-indigo-600 dark:text-indigo-300 font-semibold" : "text-gray-400"}`}>{fmtP(p)}</td>
+                                    <td className="px-2 py-1.5 text-center text-amber-500 font-bold">{sig}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                          <p className="mt-2 text-[10px] text-gray-400">Significativité : *** p&lt;0.001 · ** p&lt;0.01 · * p&lt;0.05 · · p&lt;0.1</p>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
-          <div className="flex items-center justify-between mt-4">
-            <button onClick={() => goTo(2)}
-              className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-              ← Retour
-            </button>
-            <div className="flex items-center gap-3">
+            {/* ── TAB : RÉSIDUS ── */}
+            {part4Tab === "residus" && (
+              <div className="space-y-4">
+                {/* Info points exclus */}
+                {excludedPoints.size > 0 && (
+                  <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2">
+                    <span className="text-xs text-amber-700 dark:text-amber-300">
+                      {excludedPoints.size} point(s) exclu(s) du calcul des coefficients.
+                    </span>
+                    <button onClick={() => setExcludedPoints(new Set())}
+                      className="text-xs text-amber-600 dark:text-amber-400 hover:underline">
+                      Réinclure tous
+                    </button>
+                  </div>
+                )}
+                {models.map((m, mi) => {
+                  const fit = fits[mi];
+                  const col = modelColors[mi % modelColors.length];
+                  if (!fit) return (
+                    <div key={m.id} className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5`}>
+                      <p className="text-sm text-red-500">Calcul impossible — pas assez de points actifs ({validRows.length}) pour {m.terms.length + 1} paramètres.</p>
+                    </div>
+                  );
+                  const maxResid = Math.max(...fit.residuals.map(Math.abs), 1e-10);
+                  const minRequired = Math.max(...models.map(x => x.terms.length)) + 2;
+                  return (
+                    <div key={m.id} className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5`}>
+                      <div className="flex items-center gap-2 mb-3">
+                        <span className={`size-2.5 rounded-full ${col.dot}`} />
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{m.name}</h3>
+                        <span className="ml-auto text-xs text-gray-400">{activeRows.length} points actifs</span>
+                      </div>
+                      {/* Tableau résidus avec scroll et 6 lignes visibles */}
+                      <div className="overflow-x-auto mb-4">
+                        <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
+                          <thead>
+                            <tr className="border-b border-gray-100 dark:border-gray-800">
+                              <th className="text-center text-[11px] font-medium text-gray-400 pb-2 px-2 w-8">✕</th>
+                              <th className="text-left text-[11px] font-medium text-gray-400 pb-2 px-2 w-8">#</th>
+                              <th className="text-right text-[11px] font-medium text-gray-400 pb-2 px-2">Y mesuré</th>
+                              <th className="text-right text-[11px] font-medium text-gray-400 pb-2 px-2">Ŷ calculé</th>
+                              <th className="text-right text-[11px] font-medium text-gray-400 pb-2 px-2">Résidu</th>
+                              <th className="text-right text-[11px] font-medium text-gray-400 pb-2 px-2">Normé</th>
+                              <th className="px-2 pb-2 text-[11px] font-medium text-gray-400">Barre</th>
+                            </tr>
+                          </thead>
+                        </table>
+                        {/* Corps scrollable */}
+                        <div className="overflow-y-auto" style={{ maxHeight: "calc(6 * 32px)" }}>
+                          <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
+                            <tbody>
+                              {allValidRows.map(({ row, i: globalIdx }, rowIdx) => {
+                                const isExcluded = excludedPoints.has(globalIdx);
+                                // Find position in activeRows for fit data
+                                const activeIdx = activeRows.findIndex(x => x.i === globalIdx);
+                                const resid = !isExcluded && activeIdx >= 0 ? fit.residuals[activeIdx] : null;
+                                const yHatVal = !isExcluded && activeIdx >= 0 ? fit.yHat[activeIdx] : null;
+                                const normed = resid !== null && fit.MSE > 0 ? resid / Math.sqrt(fit.MSE) : null;
+                                const barPct = resid !== null && maxResid > 0 ? Math.abs(resid) / maxResid * 100 : 0;
+                                const isLarge = normed !== null && Math.abs(normed) > 2;
+                                // Can we exclude this point?
+                                const canExclude = !isExcluded && (allValidRows.length - excludedPoints.size - 1) >= minRequired;
+                                return (
+                                  <tr key={globalIdx}
+                                    className={`border-b border-gray-50 dark:border-gray-800/50 last:border-0 transition-colors
+                                      ${isExcluded ? "bg-gray-100 dark:bg-gray-800 opacity-50" : isLarge ? "bg-red-50/40 dark:bg-red-900/10" : ""}`}>
+                                    {/* Checkbox exclusion */}
+                                    <td className="px-2 py-1.5 text-center w-8">
+                                      <input type="checkbox" checked={isExcluded}
+                                        disabled={!isExcluded && !canExclude}
+                                        onChange={() => toggleExclude(globalIdx, Math.max(...models.map(x => x.terms.length)))}
+                                        className="size-3 rounded border-gray-300 text-red-500 focus:ring-red-400 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                                        title={!isExcluded && !canExclude ? "Pas assez de points restants" : isExcluded ? "Réinclure ce point" : "Exclure ce point"}
+                                      />
+                                    </td>
+                                    <td className={`px-2 py-1.5 w-8 ${isExcluded ? "text-gray-300 dark:text-gray-600" : "text-gray-400"}`}>{globalIdx + 1}</td>
+                                    <td className={`px-2 py-1.5 text-right font-mono ${isExcluded ? "text-gray-300 dark:text-gray-600 line-through" : "text-gray-700 dark:text-gray-200"}`}>{fmt(allValidRows[rowIdx].y, 3)}</td>
+                                    <td className={`px-2 py-1.5 text-right font-mono ${isExcluded ? "text-gray-300 dark:text-gray-600" : "text-gray-700 dark:text-gray-200"}`}>{yHatVal !== null ? fmt(yHatVal, 3) : "—"}</td>
+                                    <td className={`px-2 py-1.5 text-right font-mono font-semibold ${isExcluded ? "text-gray-300 dark:text-gray-600" : resid !== null && resid >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>
+                                      {resid !== null ? fmt(resid, 3) : "—"}
+                                    </td>
+                                    <td className={`px-2 py-1.5 text-right font-mono ${isExcluded ? "text-gray-300" : isLarge ? "text-red-600 font-bold" : "text-gray-500"}`}>
+                                      {normed !== null ? fmt(normed, 2) : "—"}
+                                    </td>
+                                    <td className="px-2 py-1.5">
+                                      {!isExcluded && resid !== null && (
+                                        <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden w-24">
+                                          <div className={`h-full rounded-full ${resid >= 0 ? "bg-emerald-400" : "bg-red-400"}`}
+                                            style={{ width: `${barPct}%`, marginLeft: resid < 0 ? `${100 - barPct}%` : "0" }} />
+                                        </div>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                      {/* Diagramme résidus vs Ŷ */}
+                      <div className="mt-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-3">Résidus vs Ŷ</p>
+                        <ResidualPlot yHat={fit.yHat} residuals={fit.residuals} color={col.dot} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── TAB : ANOVA ── */}
+            {part4Tab === "anova" && (
+              <div className="space-y-4">
+                {models.map((m, mi) => {
+                  const fit = fits[mi];
+                  const col = modelColors[mi % modelColors.length];
+                  if (!fit) return <div key={m.id} className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5`}><p className="text-sm text-red-500">Calcul impossible.</p></div>;
+                  const modelOK = fit.pF !== null && fit.pF < 0.05;
+                  const R2ok = fit.R2adj > 0.8;
+                  const verdict = modelOK && R2ok ? "acceptable" : !modelOK ? "à rejeter" : "insuffisant";
+                  const verdictCls = verdict === "acceptable" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300" : verdict === "à rejeter" ? "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300" : "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300";
+                  return (
+                    <div key={m.id} className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5`}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className={`size-2.5 rounded-full ${col.dot}`} />
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{m.name}</h3>
+                        <span className={`ml-auto rounded-full px-3 py-1 text-xs font-semibold ${verdictCls}`}>
+                          Modèle {verdict}
+                        </span>
+                      </div>
+                      {/* Indicateurs */}
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                        {[
+                          { label: "R²", value: fmt(fit.R2, 4) },
+                          { label: "R² ajusté", value: fmt(fit.R2adj, 4) },
+                          { label: "F", value: fmt(fit.Fstat, 3) },
+                          { label: "Prob &gt; F", value: fmtP(fit.pF) },
+                        ].map(stat => (
+                          <div key={stat.label} className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 text-center">
+                            <p className="text-[11px] text-gray-400 mb-1">{stat.label}</p>
+                            <p className="text-sm font-semibold font-mono text-gray-900 dark:text-white">{stat.value}</p>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Tableau ANOVA */}
+                      <div className="overflow-x-auto mb-4">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="border-b border-gray-100 dark:border-gray-800">
+                              {["Source", "SC", "dl", "CM", "F", "Prob &gt; F"].map(h => (
+                                <th key={h} className="text-left text-[11px] font-medium text-gray-400 pb-2 px-2">{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[
+                              { label: "Régression", sc: fit.SSR, df: fit.dfR, cm: fit.MSR, f: fit.Fstat, p: fit.pF },
+                              { label: "Résidus", sc: fit.SSE, df: fit.dfE, cm: fit.MSE, f: null, p: null },
+                              { label: "Total", sc: fit.SST, df: fit.n - 1, cm: null, f: null, p: null },
+                            ].map(row => (
+                              <tr key={row.label} className="border-b border-gray-50 dark:border-gray-800/50 last:border-0">
+                                <td className="px-2 py-1.5 font-medium text-gray-700 dark:text-gray-200">{row.label}</td>
+                                <td className="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-300">{fmt(row.sc, 4)}</td>
+                                <td className="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-300">{row.df}</td>
+                                <td className="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-300">{row.cm !== null ? fmt(row.cm, 4) : "—"}</td>
+                                <td className="px-2 py-1.5 text-right font-mono text-gray-600 dark:text-gray-300">{row.f !== null ? fmt(row.f, 3) : "—"}</td>
+                                <td className={`px-2 py-1.5 text-right font-mono ${row.p !== null && row.p < 0.05 ? "text-indigo-600 dark:text-indigo-300 font-semibold" : "text-gray-400"}`}>{row.p !== null ? fmtP(row.p) : "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Verdict détaillé */}
+                      <div className={`rounded-lg p-3 ${verdict === "acceptable" ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700" : verdict === "à rejeter" ? "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700" : "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700"}`}>
+                        <p className="text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">Analyse de validation</p>
+                        <ul className="text-xs space-y-1">
+                          <li className={`flex items-start gap-1.5 ${R2ok ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>
+                            <span>{R2ok ? "✓" : "△"}</span>
+                            <span>R² ajusté = {fmt(fit.R2adj, 4)} {R2ok ? "(bon ajustement ≥ 0.8)" : "(ajustement insuffisant < 0.8)"}</span>
+                          </li>
+                          <li className={`flex items-start gap-1.5 ${modelOK ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300"}`}>
+                            <span>{modelOK ? "✓" : "✗"}</span>
+                            <span>ANOVA modèle : Prob &gt; F = {fmtP(fit.pF)} {modelOK ? "(modèle significatif)" : "(modèle non significatif — à rejeter)"}</span>
+                          </li>
+                          <li className="flex items-start gap-1.5 text-gray-500">
+                            <span>·</span>
+                            <span>Degrés de liberté résidus : {fit.dfE} {fit.dfE < 2 ? "⚠ trop peu pour une analyse fiable" : ""}</span>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── TAB : EFFETS (PARETO) ── */}
+            {part4Tab === "effets" && (
+              <div className="space-y-4">
+                {models.map((m, mi) => {
+                  const fit = fits[mi];
+                  const col = modelColors[mi % modelColors.length];
+                  if (!fit) return <div key={m.id} className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5`}><p className="text-sm text-red-500">Calcul impossible.</p></div>;
+                  // Effets = |coefficients| sauf constante, triés
+                  const effects = m.terms.map((t, i) => ({
+                    term: t,
+                    label: termLabel(t),
+                    coeff: fit.coeffs[i + 1],
+                    absCoeff: Math.abs(fit.coeffs[i + 1]),
+                    p: fit.pCoeffs[i + 1],
+                  })).sort((a, b) => b.absCoeff - a.absCoeff);
+                  const maxAbs = effects[0]?.absCoeff || 1;
+                  return (
+                    <div key={m.id} className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5`}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className={`size-2.5 rounded-full ${col.dot}`} />
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{m.name} — Diagramme de Pareto des effets</h3>
+                      </div>
+                      <div className="space-y-2">
+                        {effects.map((ef, i) => {
+                          const barPct = maxAbs > 0 ? ef.absCoeff / maxAbs * 100 : 0;
+                          const isSignif = ef.p !== null && ef.p < 0.05;
+                          const isPos = ef.coeff >= 0;
+                          return (
+                            <div key={ef.term} className="flex items-center gap-3">
+                              <span className="w-20 text-right text-xs font-mono text-gray-500 dark:text-gray-400 shrink-0">{ef.label}</span>
+                              <div className="flex-1 h-6 bg-gray-100 dark:bg-gray-800 rounded overflow-hidden relative">
+                                <div
+                                  className={`h-full rounded transition-all ${isSignif ? (isPos ? "bg-indigo-500" : "bg-red-400") : (isPos ? "bg-indigo-200 dark:bg-indigo-800" : "bg-red-200 dark:bg-red-900")}`}
+                                  style={{ width: `${barPct}%` }}
+                                />
+                                <span className="absolute inset-y-0 right-2 flex items-center text-[11px] font-mono font-semibold text-gray-600 dark:text-gray-300">
+                                  {fmt(ef.coeff, 4)}
+                                </span>
+                              </div>
+                              <span className={`w-12 text-[11px] font-mono text-right shrink-0 ${isSignif ? "text-indigo-600 dark:text-indigo-300 font-semibold" : "text-gray-400"}`}>
+                                {fmtP(ef.p)}
+                              </span>
+                              <span className="w-6 text-amber-500 font-bold text-xs shrink-0">{sigStars(ef.p)}</span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <div className="mt-3 flex gap-4 text-[10px] text-gray-400">
+                        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-indigo-500" /> Positif significatif (p&lt;0.05)</span>
+                        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-red-400" /> Négatif significatif</span>
+                        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-indigo-200 dark:bg-indigo-800" /> Non significatif</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* ── TAB : ISORÉPONSES ── */}
+            {part4Tab === "isoresponse" && (
+              <div className="space-y-4">
+                {models.map((m, mi) => {
+                  const fit = fits[mi];
+                  const col = modelColors[mi % modelColors.length];
+                  if (!fit) return <div key={m.id} className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5`}><p className="text-sm text-red-500">Calcul impossible.</p></div>;
+                  const contFactors = factors.filter(f => f.continuous);
+                  if (contFactors.length < 2) return (
+                    <div key={m.id} className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5`}>
+                      <p className="text-sm text-gray-500">Les courbes isoréponses nécessitent au moins 2 facteurs continus.</p>
+                    </div>
+                  );
+                  return (
+                    <IsoResponsePanel key={m.id} model={m} fit={fit} factors={factors} modelColors={col} allTerms={getAllPossibleTerms(factors)} modelDefault={modelDefault} />
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Navigation */}
+            <div className="flex items-center justify-between mt-6">
+              <button onClick={() => goTo(3)}
+                className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
+                ← Retour
+              </button>
               {editMode && (
                 <button onClick={exportJSON}
                   className="flex items-center gap-1.5 rounded-md border border-indigo-300 dark:border-indigo-700 bg-indigo-50 dark:bg-indigo-900/20 px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
-                    <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V12a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 1.414L10 16.414l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
                   Exporter JSON
                 </button>
               )}
-              <button className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 transition-colors">
-                Continuer →
-              </button>
             </div>
-          </div>
-        </>
-      )}
+          </>
+        );
+      })()}
     </div>
   );
 }

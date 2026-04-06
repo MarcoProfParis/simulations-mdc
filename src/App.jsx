@@ -173,7 +173,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark, exp
                       leaveTo="opacity-0 translate-y-[-4px]"
                     >
                       <PopoverPanel
-                        className="absolute top-[calc(100%+1px)] left-0 w-56 z-[60] overflow-hidden rounded-b-xl rounded-tr-xl"
+                        className="absolute top-[calc(100%+1px)] left-0 w-56 z-60 overflow-hidden rounded-b-xl rounded-tr-xl"
                         style={{
                           background: "var(--bg-card)",
                           border: "1px solid var(--border)",
@@ -291,7 +291,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark, exp
       {isMobile && (
         <div
           onClick={() => setMobileOpen(false)}
-          className="fixed inset-0 z-[49] transition-opacity duration-250"
+          className="fixed inset-0 z-49 transition-opacity duration-250"
           style={{
             top: 56,
             background: "rgba(0,0,0,0.4)",
@@ -304,7 +304,7 @@ function TopNav({ categoryId, appId, setCategoryId, setAppId, dark, setDark, exp
       {/* ── MOBILE : Drawer ── */}
       {isMobile && (
         <div
-          className="fixed top-[56px] right-0 bottom-0 z-50 flex flex-col overflow-y-auto"
+          className="fixed top-14 right-0 bottom-0 z-50 flex flex-col overflow-y-auto"
           style={{
             width: "min(300px, 85vw)",
             background: "var(--bg-card)",
