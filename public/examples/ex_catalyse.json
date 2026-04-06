@@ -1,177 +1,135 @@
 {
-  "title": "Optimisation d'une réaction catalytique",
-  "context": "3 facteurs · Rendement (%)",
-  "real": false,
+  "meta": {
+    "id": "ex_reaction_catalytique",
+    "title": "Optimisation d'une réaction catalytique",
+    "context": "3 facteurs · Rendement (%)",
+    "tags": ["modèle synergie", "3 facteurs", "plan factoriel complet 2³"],
+    "difficulty": "intermédiaire",
+    "real_data": false,
+    "source": ""
+  },
+
   "factors": [
     {
-      "n": "Température",
-      "u": "°C",
-      "lo": "80",
-      "mi": "100",
-      "hi": "120"
+      "id": "X1",
+      "name": "Température",
+      "unit": "°C",
+      "continuous": true,
+      "low":  { "real": 80, "coded": -1 },
+      "high": { "real": 120, "coded":  1 }
     },
     {
-      "n": "Pression",
-      "u": "bar",
-      "lo": "1",
-      "mi": "2",
-      "hi": "3"
+      "id": "X2",
+      "name": "Pression",
+      "unit": "bar",
+      "continuous": true,
+      "low":  { "real": 1, "coded": -1 },
+      "high": { "real": 3, "coded":  1 }
     },
     {
-      "n": "Temps",
-      "u": "h",
-      "lo": "1",
-      "mi": "2",
-      "hi": "3"
+      "id": "X3",
+      "name": "Temps",
+      "unit": "h",
+      "continuous": true,
+      "low":  { "real": 1, "coded": -1 },
+      "high": { "real": 3, "coded":  1 }
     }
   ],
-  "sets": [
+
+  "responses": [
     {
-      "label": "Jeu A — catalyseur Pd/C",
-      "hint": "Interactions T×P significatives · α₁₂ ≈ 3",
-      "response": {
-        "name": "Rendement",
-        "unit": "%"
-      },
-      "experiments": [
-        {
-          "exp_no": 1,
-          "run_order": 7,
-          "X1": -1,
-          "X2": -1,
-          "X3": -1,
-          "Y": 64.45
-        },
-        {
-          "exp_no": 2,
-          "run_order": 4,
-          "X1": -1,
-          "X2": -1,
-          "X3": 1,
-          "Y": 59.537
-        },
-        {
-          "exp_no": 3,
-          "run_order": 2,
-          "X1": -1,
-          "X2": 1,
-          "X3": -1,
-          "Y": 74.705
-        },
-        {
-          "exp_no": 4,
-          "run_order": 1,
-          "X1": -1,
-          "X2": 1,
-          "X3": 1,
-          "Y": 70.469
-        },
-        {
-          "exp_no": 5,
-          "run_order": 8,
-          "X1": 1,
-          "X2": -1,
-          "X3": -1,
-          "Y": 85.054
-        },
-        {
-          "exp_no": 6,
-          "run_order": 3,
-          "X1": 1,
-          "X2": -1,
-          "X3": 1,
-          "Y": 75.505
-        },
-        {
-          "exp_no": 7,
-          "run_order": 6,
-          "X1": 1,
-          "X2": 1,
-          "X3": -1,
-          "Y": 102.709
-        },
-        {
-          "exp_no": 8,
-          "run_order": 5,
-          "X1": 1,
-          "X2": 1,
-          "X3": 1,
-          "Y": 90.854
-        }
+      "id": "Y1",
+      "name": "Rendement",
+      "unit": "%"
+    }
+  ],
+
+  "center_point": {
+    "present": false,
+    "replicates": 2
+  },
+
+  "model_default": ["X1", "X2", "X3", "X1X2", "X1X3", "X2X3"],
+
+  "runs": [
+    {
+      "id": 1,
+      "coded": { "X1": -1, "X2": -1, "X3": -1 },
+      "real":  { "X1": 80, "X2": 1, "X3": 1 },
+      "center": false,
+      "replicates": [
+        { "rep": 1, "Y1": 64.45 },
+        { "rep": 2, "Y1": 65.683 }
       ]
     },
     {
-      "label": "Jeu B — catalyseur Pt/Al₂O₃",
-      "hint": "Interaction T×P plus forte · α₁₂ ≈ 4",
-      "response": {
-        "name": "Rendement",
-        "unit": "%"
-      },
-      "experiments": [
-        {
-          "exp_no": 1,
-          "run_order": 6,
-          "X1": -1,
-          "X2": -1,
-          "X3": -1,
-          "Y": 65.683
-        },
-        {
-          "exp_no": 2,
-          "run_order": 8,
-          "X1": -1,
-          "X2": -1,
-          "X3": 1,
-          "Y": 58.799
-        },
-        {
-          "exp_no": 3,
-          "run_order": 7,
-          "X1": -1,
-          "X2": 1,
-          "X3": -1,
-          "Y": 71.322
-        },
-        {
-          "exp_no": 4,
-          "run_order": 5,
-          "X1": -1,
-          "X2": 1,
-          "X3": 1,
-          "Y": 62.881
-        },
-        {
-          "exp_no": 5,
-          "run_order": 1,
-          "X1": 1,
-          "X2": -1,
-          "X3": -1,
-          "Y": 75.174
-        },
-        {
-          "exp_no": 6,
-          "run_order": 3,
-          "X1": 1,
-          "X2": -1,
-          "X3": 1,
-          "Y": 73.593
-        },
-        {
-          "exp_no": 7,
-          "run_order": 4,
-          "X1": 1,
-          "X2": 1,
-          "X3": -1,
-          "Y": 104.559
-        },
-        {
-          "exp_no": 8,
-          "run_order": 2,
-          "X1": 1,
-          "X2": 1,
-          "X3": 1,
-          "Y": 89.344
-        }
+      "id": 2,
+      "coded": { "X1": -1, "X2": -1, "X3": 1 },
+      "real":  { "X1": 80, "X2": 1, "X3": 3 },
+      "center": false,
+      "replicates": [
+        { "rep": 1, "Y1": 59.537 },
+        { "rep": 2, "Y1": 58.799 }
+      ]
+    },
+    {
+      "id": 3,
+      "coded": { "X1": -1, "X2": 1, "X3": -1 },
+      "real":  { "X1": 80, "X2": 3, "X3": 1 },
+      "center": false,
+      "replicates": [
+        { "rep": 1, "Y1": 74.705 },
+        { "rep": 2, "Y1": 71.322 }
+      ]
+    },
+    {
+      "id": 4,
+      "coded": { "X1": -1, "X2": 1, "X3": 1 },
+      "real":  { "X1": 80, "X2": 3, "X3": 3 },
+      "center": false,
+      "replicates": [
+        { "rep": 1, "Y1": 70.469 },
+        { "rep": 2, "Y1": 62.881 }
+      ]
+    },
+    {
+      "id": 5,
+      "coded": { "X1": 1, "X2": -1, "X3": -1 },
+      "real":  { "X1": 120, "X2": 1, "X3": 1 },
+      "center": false,
+      "replicates": [
+        { "rep": 1, "Y1": 85.054 },
+        { "rep": 2, "Y1": 75.174 }
+      ]
+    },
+    {
+      "id": 6,
+      "coded": { "X1": 1, "X2": -1, "X3": 1 },
+      "real":  { "X1": 120, "X2": 1, "X3": 3 },
+      "center": false,
+      "replicates": [
+        { "rep": 1, "Y1": 75.505 },
+        { "rep": 2, "Y1": 73.593 }
+      ]
+    },
+    {
+      "id": 7,
+      "coded": { "X1": 1, "X2": 1, "X3": -1 },
+      "real":  { "X1": 120, "X2": 3, "X3": 1 },
+      "center": false,
+      "replicates": [
+        { "rep": 1, "Y1": 102.709 },
+        { "rep": 2, "Y1": 104.559 }
+      ]
+    },
+    {
+      "id": 8,
+      "coded": { "X1": 1, "X2": 1, "X3": 1 },
+      "real":  { "X1": 120, "X2": 3, "X3": 3 },
+      "center": false,
+      "replicates": [
+        { "rep": 1, "Y1": 90.854 },
+        { "rep": 2, "Y1": 89.344 }
       ]
     }
   ]

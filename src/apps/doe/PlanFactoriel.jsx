@@ -9,7 +9,6 @@ import {
   DialogTitle,
 } from "@headlessui/react";
 import {
-  CheckIcon,
   ExclamationTriangleIcon,
   Bars3Icon,
   XMarkIcon,
@@ -18,6 +17,7 @@ import {
   ArrowPathIcon,
   BookOpenIcon,
 } from "@heroicons/react/24/outline";
+import { CheckIcon } from "@heroicons/react/24/solid";
 
 // ─── utilitaires ──────────────────────────────────────────────────────────────
 
@@ -743,25 +743,53 @@ export default function PlanFactoriel() {
       )}
 
       {/* ── STEPPER ── */}
-      <nav className="flex items-center gap-1 mb-6">
-        {[{ n: 1, l: "Facteurs & réponses" }, { n: 2, l: "Matrice" }, { n: 3, l: "Modèle" }].map((s, i) => (
-          <div key={s.n} className="flex items-center gap-1 shrink-0">
-            {i > 0 && <div className="w-6 h-px bg-gray-200 dark:bg-gray-700 mx-1" />}
-            <button onClick={() => goTo(s.n)}
-              className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-              <span className={`size-6 rounded-full flex items-center justify-center text-xs font-semibold shrink-0 ${
-                part > s.n ? "bg-emerald-500 text-white" :
-                part === s.n ? "bg-gray-900 text-white dark:bg-white dark:text-gray-900" :
-                "border border-gray-300 dark:border-gray-600 text-gray-500 dark:text-gray-400"
-              }`}>
-                {part > s.n ? "✓" : s.n}
-              </span>
-              <span className={`text-sm ${part === s.n ? "font-medium text-gray-900 dark:text-white" : "text-gray-500 dark:text-gray-400"}`}>
-                {s.l}
-              </span>
-            </button>
-          </div>
-        ))}
+      <nav aria-label="Progression" className="mb-6">
+        <ol role="list" className="divide-y divide-gray-300 rounded-md border border-gray-300 md:flex md:divide-y-0 dark:divide-white/15 dark:border-white/15">
+          {[
+            { n: 1, id: "01", l: "Facteurs & réponses" },
+            { n: 2, id: "02", l: "Matrice" },
+            { n: 3, id: "03", l: "Modèle" },
+          ].map((s, i, arr) => {
+            const status = part > s.n ? "complete" : part === s.n ? "current" : "upcoming";
+            return (
+              <li key={s.n} className="relative md:flex md:flex-1">
+                {status === "complete" ? (
+                  <button onClick={() => goTo(s.n)} className="group flex w-full items-center">
+                    <span className="flex items-center px-6 py-4 text-sm font-medium">
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-full bg-indigo-600 group-hover:bg-indigo-800 dark:bg-indigo-500 dark:group-hover:bg-indigo-400">
+                        <CheckIcon aria-hidden="true" className="size-6 text-white" />
+                      </span>
+                      <span className="ml-4 text-sm font-medium text-gray-900 dark:text-white">{s.l}</span>
+                    </span>
+                  </button>
+                ) : status === "current" ? (
+                  <button onClick={() => goTo(s.n)} aria-current="step" className="flex items-center px-6 py-4 text-sm font-medium">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-indigo-600 dark:border-indigo-400">
+                      <span className="text-indigo-600 dark:text-indigo-400">{s.id}</span>
+                    </span>
+                    <span className="ml-4 text-sm font-medium text-indigo-600 dark:text-indigo-400">{s.l}</span>
+                  </button>
+                ) : (
+                  <button onClick={() => goTo(s.n)} className="group flex items-center">
+                    <span className="flex items-center px-6 py-4 text-sm font-medium">
+                      <span className="flex size-10 shrink-0 items-center justify-center rounded-full border-2 border-gray-300 group-hover:border-gray-400 dark:border-white/15 dark:group-hover:border-white/25">
+                        <span className="text-gray-500 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white">{s.id}</span>
+                      </span>
+                      <span className="ml-4 text-sm font-medium text-gray-500 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white">{s.l}</span>
+                    </span>
+                  </button>
+                )}
+                {i !== arr.length - 1 && (
+                  <div aria-hidden="true" className="absolute top-0 right-0 hidden h-full w-5 md:block">
+                    <svg fill="none" viewBox="0 0 22 80" preserveAspectRatio="none" className="size-full text-gray-300 dark:text-white/15">
+                      <path d="M0 -2L20 40L0 82" stroke="currentcolor" vectorEffect="non-scaling-stroke" strokeLinejoin="round" />
+                    </svg>
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ol>
       </nav>
 
       {/* ══════════════════════════════════════════════════════ PARTIE 1 */}
