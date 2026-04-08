@@ -44,4 +44,20 @@ export const EXAMPLE_FILES = [
     difficulty: "intermédiaire",
     real_data: false,
   },
+  {
+    file: "ex_optimisation_reaction.json",
+    url: `${base}examples/ex_optimisation_reaction.json`,
+    title: "Optimisation d'une réaction de synthèse",
+    context: "2 facteurs · Plan CCF · Modèle quadratique · 13 essais",
+    difficulty: "avancé",
+    real_data: false,
+  },
+  {
+    file: "ex_optimisation_avance.json",
+    url: `${base}examples/ex_optimisation_avance.json`,
+    title: "Optimisation d'une réaction enzymatique",
+    context: "2 facteurs · CCF 20 essais · Maximum très marqué · Q-Q plot fiable",
+    difficulty: "avancé",
+    real_data: false,
+  },
 ];

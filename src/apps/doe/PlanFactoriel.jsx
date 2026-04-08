@@ -18,6 +18,9 @@ import {
   BookOpenIcon,
 } from "@heroicons/react/24/outline";
 import { CheckIcon } from "@heroicons/react/24/solid";
+import { HelpProvider, HelpButton } from "./HelpDrawer";
+import Surface3D from "./Surface3D";
+import EffetsPanel from "./EffetsPanel";
 
 // ─── utilitaires ──────────────────────────────────────────────────────────────
 
@@ -377,6 +380,41 @@ function tPvalue(t, df) {
   if (!isFinite(t)) return 1;
   const x = df / (df + t * t);
   return incompleteBeta(x, df / 2, 0.5);
+}
+
+// Table du quantile de Student t(α=0.025, df) — seuil bilatéral 5%
+function tCritical(df) {
+  const table = {
+    1: 12.706, 2: 4.303, 3: 3.182, 4: 2.776, 5: 2.571,
+    6: 2.447,  7: 2.365, 8: 2.306, 9: 2.262, 10: 2.228,
+    15: 2.131, 20: 2.086, 30: 2.042, 60: 2.000,
+  };
+  if (table[df]) return table[df];
+  if (df > 60)   return 1.96 + 0.5 / Math.sqrt(df);
+  const keys = Object.keys(table).map(Number).sort((a,b)=>a-b);
+  for (let i = 0; i < keys.length - 1; i++) {
+    if (df >= keys[i] && df <= keys[i+1]) {
+      const frac = (df - keys[i]) / (keys[i+1] - keys[i]);
+      return table[keys[i]] + frac * (table[keys[i+1]] - table[keys[i]]);
+    }
+  }
+  return 1.96;
+}
+
+// Approximation du quantile de la loi normale standard (algorithme Beasley-Springer-Moro)
+function normalQuantile(p) {
+  if (p <= 0) return -4;
+  if (p >= 1) return  4;
+  if (p === 0.5) return 0;
+  const a = [2.515517, 0.802853, 0.010328];
+  const b = [1.432788, 0.189269, 0.001308];
+  const t = p < 0.5
+    ? Math.sqrt(-2 * Math.log(p))
+    : Math.sqrt(-2 * Math.log(1 - p));
+  const num   = a[0] + a[1]*t + a[2]*t*t;
+  const denom = 1 + b[0]*t + b[1]*t*t + b[2]*t*t*t;
+  const z = t - num / denom;
+  return p < 0.5 ? -z : z;
 }
 
 function incompleteBeta(x, a, b) {
@@ -1210,6 +1248,132 @@ function ResidualPlot({ yHat, residuals, color }) {
   );
 }
 
+function QQPlotSVG({ residuals, MSE, col }) {
+  if (!residuals || residuals.length < 3) return null;
+
+  const W = 280, H = 220;
+  const PAD = { l: 44, r: 16, t: 16, b: 36 };
+  const PW = W - PAD.l - PAD.r;
+  const PH = H - PAD.t - PAD.b;
+
+  // Résidus normés triés
+  const s = MSE > 0 ? Math.sqrt(MSE) : 1;
+  const normed = residuals.map(r => r / s);
+  const sorted = [...normed].sort((a, b) => a - b);
+  const n = sorted.length;
+
+  // Quantiles théoriques normaux (formule de Blom : (i - 3/8) / (n + 1/4))
+  const theoretical = sorted.map((_, i) => normalQuantile((i + 1 - 0.375) / (n + 0.25)));
+
+  // Échelles
+  const allX = theoretical, allY = sorted;
+  const xMin = Math.min(...allX) - 0.2;
+  const xMax = Math.max(...allX) + 0.2;
+  const yMin = Math.min(...allY, xMin) - 0.2;
+  const yMax = Math.max(...allY, xMax) + 0.2;
+  const sx = v => PAD.l + (v - xMin) / (xMax - xMin) * PW;
+  const sy = v => PAD.t + (1 - (v - yMin) / (yMax - yMin)) * PH;
+
+  // Couleur selon le modèle
+  const dotColor = col?.dot === "bg-indigo-500" ? "#6366f1"
+    : col?.dot === "bg-emerald-500" ? "#10b981" : "#f59e0b";
+
+  // Droite de référence y = x (normalité parfaite)
+  const x1ref = xMin, y1ref = xMin, x2ref = xMax, y2ref = xMax;
+
+  // Détection anomalies : distance à la droite > 0.65
+  const anomalies = sorted.map((yv, i) => Math.abs(yv - theoretical[i])).map(d => d > 0.65);
+
+  // Ticks
+  const ticks = [-2, -1, 0, 1, 2].filter(t => t >= xMin && t <= xMax);
+
+  return (
+    <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
+         style={{ fontFamily: "monospace", overflow: "visible" }}>
+
+      {/* Fond zone de tracé */}
+      <rect x={PAD.l} y={PAD.t} width={PW} height={PH}
+            fill="#f9fafb" stroke="#e5e7eb" strokeWidth="0.5" className="dark:fill-gray-800/50 dark:stroke-gray-700"/>
+
+      {/* Grille légère */}
+      {ticks.map(t => (
+        <g key={t}>
+          <line x1={sx(t)} y1={PAD.t} x2={sx(t)} y2={PAD.t+PH}
+                stroke="#e5e7eb" strokeWidth="0.5" strokeDasharray="3,3"/>
+          <line x1={PAD.l} y1={sy(t)} x2={PAD.l+PW} y2={sy(t)}
+                stroke="#e5e7eb" strokeWidth="0.5" strokeDasharray="3,3"/>
+        </g>
+      ))}
+
+      {/* Droite de référence (normalité parfaite y = x) */}
+      <line
+        x1={sx(x1ref)} y1={sy(y1ref)} x2={sx(x2ref)} y2={sy(y2ref)}
+        stroke="#ef4444" strokeWidth="1.2" strokeDasharray="5,3" opacity="0.7"
+      />
+
+      {/* Zone de confiance approximative (± 0.8 autour de la droite) */}
+      <polygon
+        points={[
+          `${sx(xMin)},${sy(xMin + 0.8)}`,
+          `${sx(xMax)},${sy(xMax + 0.8)}`,
+          `${sx(xMax)},${sy(xMax - 0.8)}`,
+          `${sx(xMin)},${sy(xMin - 0.8)}`,
+        ].join(" ")}
+        fill="#ef444415"
+        stroke="none"
+      />
+
+      {/* Points */}
+      {sorted.map((yv, i) => {
+        const px = sx(theoretical[i]);
+        const py = sy(yv);
+        const isAnom = anomalies[i];
+        return (
+          <g key={i}>
+            <circle
+              cx={px} cy={py} r={isAnom ? 5 : 4}
+              fill={isAnom ? "#ef4444" : dotColor}
+              fillOpacity={isAnom ? 0.9 : 0.75}
+              stroke={isAnom ? "#dc2626" : "white"}
+              strokeWidth="1"
+            />
+            {isAnom && (
+              <text x={px + 6} y={py - 5} fontSize="8" fill="#dc2626" fontWeight="600">
+                {i + 1}
+              </text>
+            )}
+          </g>
+        );
+      })}
+
+      {/* Axes labels */}
+      {ticks.map(t => (
+        <g key={t}>
+          <text x={sx(t)} y={PAD.t+PH+12} textAnchor="middle" fontSize="8" fill="#9ca3af">{t}</text>
+          <text x={PAD.l-4} y={sy(t)+3} textAnchor="end" fontSize="8" fill="#9ca3af">{t}</text>
+        </g>
+      ))}
+
+      {/* Titre axes */}
+      <text x={W/2} y={H-2} textAnchor="middle" fontSize="9" fill="#9ca3af">
+        Quantiles théoriques N(0,1)
+      </text>
+      <text
+        x={10} y={PAD.t + PH/2}
+        textAnchor="middle" fontSize="9" fill="#9ca3af"
+        transform={`rotate(-90, 10, ${PAD.t + PH/2})`}
+      >
+        Résidus normés
+      </text>
+
+      {/* Légende */}
+      <line x1={PAD.l+4} y1={PAD.t+8} x2={PAD.l+18} y2={PAD.t+8}
+            stroke="#ef4444" strokeWidth="1.2" strokeDasharray="5,3" opacity="0.7"/>
+      <text x={PAD.l+21} y={PAD.t+11} fontSize="8" fill="#6b7280">Droite de normalité</text>
+    </svg>
+  );
+}
+
 function IsoResponsePanel({ model, fit, factors, modelColors }) {
   const [f1Idx, setF1Idx] = React.useState(0);
   const [f2Idx, setF2Idx] = React.useState(1);
@@ -1218,6 +1382,8 @@ function IsoResponsePanel({ model, fit, factors, modelColors }) {
     factors.forEach(f => { fv[f.id] = 0; });
     return fv;
   });
+  // Réticule
+  const [cursor, setCursor] = React.useState(null); // { cx, cy, c1, c2, z } ou null
 
   const contFactors = factors.filter(f => f.continuous);
   const f1 = contFactors[f1Idx] || contFactors[0];
@@ -1355,7 +1521,21 @@ function IsoResponsePanel({ model, fit, factors, modelColors }) {
 
       {/* SVG isoréponses */}
       <div className="overflow-x-auto">
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="font-mono" style={{ background: "var(--tw-bg-opacity, white)", overflow: "visible" }}>
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="font-mono" style={{ background: "var(--tw-bg-opacity, white)", overflow: "visible" }}
+          onMouseMove={e => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const svgX = (e.clientX - rect.left) * (W / rect.width);
+            const svgY = (e.clientY - rect.top)  * (H / rect.height);
+            if (svgX < PAD_L || svgX > PAD_L + PW || svgY < PAD_T || svgY > PAD_T + PH) {
+              setCursor(null); return;
+            }
+            const c1 = ((svgX - PAD_L) / PW) * 2 - 1;
+            const c2 = 1 - ((svgY - PAD_T) / PH) * 2;
+            const z  = predict(c1, c2);
+            setCursor({ cx: svgX, cy: svgY, c1, c2, z });
+          }}
+          onMouseLeave={() => setCursor(null)}
+        >
           {/* Zone de tracé */}
           <rect x={PAD_L} y={PAD_T} width={PW} height={PH} fill="#f9fafb" stroke="#e5e7eb" strokeWidth="0.5" />
 
@@ -1431,6 +1611,64 @@ function IsoResponsePanel({ model, fit, factors, modelColors }) {
             transform={`rotate(-90, 10, ${PAD_T + PH / 2})`}>
             {f2.name}{f2.unit ? ` (${f2.unit})` : ""}
           </text>
+
+          {/* ── Réticule interactif ── */}
+          {cursor && (() => {
+            const { cx, cy, c1, c2, z } = cursor;
+            const r1 = toReal(f1, c1);
+            const r2 = toReal(f2, c2);
+
+            // Tooltip dimensions
+            const tipW = 110, tipH = 52, tipPad = 7;
+            let tx = cx + 12;
+            let ty = cy - tipH - 8;
+            if (tx + tipW > W - 4) tx = cx - tipW - 12;
+            if (ty < PAD_T)        ty = cy + 10;
+
+            return (
+              <g style={{ pointerEvents: "none" }}>
+                {/* Ligne verticale */}
+                <line
+                  x1={cx} y1={PAD_T} x2={cx} y2={PAD_T + PH}
+                  stroke="#6366f1" strokeWidth="0.8" strokeDasharray="4,3" opacity="0.7"
+                />
+                {/* Ligne horizontale */}
+                <line
+                  x1={PAD_L} y1={cy} x2={PAD_L + PW} y2={cy}
+                  stroke="#6366f1" strokeWidth="0.8" strokeDasharray="4,3" opacity="0.7"
+                />
+                {/* Point central */}
+                <circle cx={cx} cy={cy} r="4" fill="#6366f1" fillOpacity="0.9" stroke="white" strokeWidth="1.5" />
+
+                {/* Graduation X en bas */}
+                <line x1={cx} y1={PAD_T+PH} x2={cx} y2={PAD_T+PH+5} stroke="#6366f1" strokeWidth="1" />
+                <text x={cx} y={PAD_T+PH+14} textAnchor="middle" fontSize="8" fill="#6366f1" fontWeight="600">
+                  {r1}{f1.unit ? ` ${f1.unit}` : ""}
+                </text>
+
+                {/* Graduation Y à gauche */}
+                <line x1={PAD_L-5} y1={cy} x2={PAD_L} y2={cy} stroke="#6366f1" strokeWidth="1" />
+                <text x={PAD_L-7} y={cy+3} textAnchor="end" fontSize="8" fill="#6366f1" fontWeight="600">
+                  {r2}{f2.unit ? ` ${f2.unit}` : ""}
+                </text>
+
+                {/* Tooltip */}
+                <rect x={tx} y={ty} width={tipW} height={tipH} rx="5"
+                  fill="white" stroke="#e5e7eb" strokeWidth="0.8"
+                  style={{ filter: "drop-shadow(0 2px 6px rgba(0,0,0,0.15))" }}
+                />
+                <text x={tx+tipPad} y={ty+14} fontSize="9" fontWeight="700" fill="#111">
+                  Ŷ = {z.toFixed(3)}
+                </text>
+                <text x={tx+tipPad} y={ty+27} fontSize="8" fill="#6b7280">
+                  {f1.name||f1.id} : {r1}{f1.unit ? ` ${f1.unit}` : ""}
+                </text>
+                <text x={tx+tipPad} y={ty+40} fontSize="8" fill="#6b7280">
+                  {f2.name||f2.id} : {r2}{f2.unit ? ` ${f2.unit}` : ""}
+                </text>
+              </g>
+            );
+          })()}
         </svg>
       </div>
 
@@ -1827,6 +2065,7 @@ export default function PlanFactoriel() {
   };
 
   return (
+    <HelpProvider>
     <div className="max-w-4xl mx-auto px-4 py-6">
 
       {/* ── BARRE LATÉRALE ── */}
@@ -2118,7 +2357,7 @@ export default function PlanFactoriel() {
 
           {/* Facteurs */}
           <div className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl p-5 mb-4">
-            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Facteurs</p>
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3 flex items-center gap-2">Facteurs <HelpButton topic="facteurs" size="xs" /></p>
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
@@ -2598,13 +2837,13 @@ export default function PlanFactoriel() {
                   </div>
 
                   {/* Presets */}
-                  <div className="flex flex-wrap gap-2 mb-4">
+                  <div className="flex flex-wrap items-center gap-2 mb-4">
+                    <HelpButton topic="modele" size="xs" />
                     {[
                       { id: "linear", label: "Linéaire" },
                       { id: "synergie", label: "Synergie" },
                       { id: "quadratic", label: "Quadratique" },
                       { id: "cubic", label: "Cubique" },
-                      { id: "default", label: "Défaut JSON" },
                     ].map(p => (
                       <button key={p.id} onClick={() => applyPresetTo(activeModel.id, p.id)}
                         className={`rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors ${
@@ -2722,6 +2961,7 @@ export default function PlanFactoriel() {
         const contFactors = factors.filter(f => f.continuous);
         const has3D = contFactors.length >= 2;
         const TABS = [
+          { id: "effets_calcul", label: "Calcul des effets" },
           { id: "coefficients", label: "Coefficients" },
           { id: "residus", label: "Résidus" },
           { id: "anova", label: "ANOVA & Validation" },
@@ -2818,9 +3058,43 @@ export default function PlanFactoriel() {
               </div>
             </div>
 
+            {/* ── TAB : CALCUL DES EFFETS ── */}
+            {part4Tab === "effets_calcul" && (
+              <div className="space-y-4">
+                {models.map((m, mi) => {
+                  const fit = fits[mi];
+                  const col = modelColors[mi % modelColors.length];
+                  return (
+                    <div key={m.id} className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5`}>
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className={`size-2.5 rounded-full ${col.dot}`} />
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {m.name} — Calcul des effets et interactions
+                        </h3>
+                        <HelpButton topic="effets_calcul" size="xs" className="ml-auto" />
+                      </div>
+                      <EffetsPanel
+                        model={m}
+                        fit={fit}
+                        matrix={matrix}
+                        factors={factors}
+                        responses={responses}
+                        activeResp={activeResp}
+                        col={col}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* ── TAB : COEFFICIENTS ── */}
             {part4Tab === "coefficients" && (
               <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Coefficients estimés</h3>
+                  <HelpButton topic="coefficients" size="xs" />
+                </div>
                 {models.map((m, mi) => {
                   const fit = fits[mi];
                   const col = modelColors[mi % modelColors.length];
@@ -2881,6 +3155,10 @@ export default function PlanFactoriel() {
             {/* ── TAB : RÉSIDUS ── */}
             {part4Tab === "residus" && (
               <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Analyse des résidus</h3>
+                  <HelpButton topic="residus" size="xs" />
+                </div>
                 {/* Info points exclus */}
                 {excludedPoints.size > 0 && (
                   <div className="flex items-center justify-between bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg px-3 py-2">
@@ -2982,6 +3260,76 @@ export default function PlanFactoriel() {
                         <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-3">Résidus vs Ŷ</p>
                         <ResidualPlot yHat={fit.yHat} residuals={fit.residuals} color={col.dot} />
                       </div>
+
+                      {/* ── Q-Q Plot (normalité) ── */}
+                      <div className="mt-4 border-t border-gray-100 dark:border-gray-800 pt-4">
+                        <div className="flex items-center gap-2 mb-3">
+                          <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+                            Q-Q Plot — Normalité des résidus
+                          </p>
+                          <HelpButton topic="qqplot" size="xs" />
+                        </div>
+
+                        {fit.residuals.length >= 3 ? (
+                          <div className="flex flex-col sm:flex-row gap-4 items-start">
+                            <div className="shrink-0">
+                              <QQPlotSVG residuals={fit.residuals} MSE={fit.MSE} col={col} />
+                            </div>
+                            <div className="flex-1 space-y-2">
+                              {(() => {
+                                const s = fit.MSE > 0 ? Math.sqrt(fit.MSE) : 1;
+                                const normed = fit.residuals.map(r => r / s).sort((a,b) => a - b);
+                                const n = normed.length;
+                                const theoretical = normed.map((_, i) =>
+                                  normalQuantile((i + 1 - 0.375) / (n + 0.25))
+                                );
+                                const maxDev = Math.max(...normed.map((v, i) => Math.abs(v - theoretical[i])));
+                                const nAnom = normed.filter((v, i) => Math.abs(v - theoretical[i]) > 0.65).length;
+                                const isNormal = maxDev < 0.65;
+
+                                return (
+                                  <>
+                                    <div className={`rounded-lg px-3 py-2 text-xs ${
+                                      isNormal
+                                        ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700"
+                                        : "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700"
+                                    }`}>
+                                      <p className={`font-semibold mb-1 ${
+                                        isNormal
+                                          ? "text-emerald-700 dark:text-emerald-300"
+                                          : "text-amber-700 dark:text-amber-300"
+                                      }`}>
+                                        {isNormal ? "✓ Normalité probable" : "△ Normalité questionnable"}
+                                      </p>
+                                      <p className={isNormal
+                                        ? "text-emerald-600 dark:text-emerald-400"
+                                        : "text-amber-600 dark:text-amber-400"
+                                      }>
+                                        {isNormal
+                                          ? "Les points s'alignent correctement sur la droite rouge — l'hypothèse de normalité des résidus est respectée."
+                                          : `${nAnom} point(s) s'écarte(nt) significativement de la droite. La distribution des résidus pourrait ne pas être normale.`
+                                        }
+                                      </p>
+                                    </div>
+
+                                    <div className="rounded-lg bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-700 px-3 py-2 text-xs text-gray-500 dark:text-gray-400 space-y-1">
+                                      <p className="font-medium text-gray-600 dark:text-gray-300">Comment lire ce graphique :</p>
+                                      <p>• Points sur la droite rouge → résidus normalement distribués ✓</p>
+                                      <p>• Points en forme de S → distribution à queues épaisses</p>
+                                      <p>• Courbe ascendante/descendante → asymétrie de la distribution</p>
+                                      <p className="text-[10px] text-gray-400 mt-1 italic">
+                                        Note : avec peu d'essais (&lt; 15), le Q-Q plot est indicatif seulement.
+                                      </p>
+                                    </div>
+                                  </>
+                                );
+                              })()}
+                            </div>
+                          </div>
+                        ) : (
+                          <p className="text-xs text-gray-400">Pas assez de résidus pour tracer le Q-Q plot (minimum 3).</p>
+                        )}
+                      </div>
                     </div>
                   );
                 })}
@@ -2991,6 +3339,10 @@ export default function PlanFactoriel() {
             {/* ── TAB : ANOVA ── */}
             {part4Tab === "anova" && (
               <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Analyse de la variance (ANOVA)</h3>
+                  <HelpButton topic="anova" size="xs" />
+                </div>
                 {models.map((m, mi) => {
                   const fit = fits[mi];
                   const col = modelColors[mi % modelColors.length];
@@ -3027,8 +3379,26 @@ export default function PlanFactoriel() {
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-gray-100 dark:border-gray-800">
-                              {["Source", "SC", "dl", "CM", "F", "Prob &gt; F"].map(h => (
-                                <th key={h} className="text-left text-[11px] font-medium text-gray-400 pb-2 px-2">{h}</th>
+                              {[
+                                { label: "Source", help: null },
+                                { label: "SC", help: "Somme des Carrés — mesure la dispersion de chaque source" },
+                                { label: "dl", help: "Degrés de Liberté — nombre de valeurs indépendantes" },
+                                { label: "CM", help: "Carré Moyen = SC/dl — variance estimée" },
+                                { label: "F", help: "Statistique de Fisher = CM_R/CM_E — grand F = bon modèle" },
+                                { label: "Prob > F", help: "p-valeur : < 0.05 → modèle significatif ✓" },
+                              ].map(({ label, help }) => (
+                                <th key={label} className="text-left text-[11px] font-medium text-gray-400 pb-2 px-2">
+                                  <span className="flex items-center gap-1">
+                                    {label}
+                                    {help && (
+                                      <span title={help} className="cursor-help text-gray-300 hover:text-indigo-400 transition-colors">
+                                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="size-3">
+                                          <path fillRule="evenodd" d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0ZM9 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM6.75 8a.75.75 0 0 0 0 1.5h.75v1.75a.75.75 0 0 0 1.5 0v-2.5A.75.75 0 0 0 8.25 8h-1.5Z" clipRule="evenodd" />
+                                        </svg>
+                                      </span>
+                                    )}
+                                  </span>
+                                </th>
                               ))}
                             </tr>
                           </thead>
@@ -3080,6 +3450,10 @@ export default function PlanFactoriel() {
             {/* ── TAB : EFFETS (PARETO) ── */}
             {part4Tab === "effets" && (
               <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Diagramme de Pareto des effets</h3>
+                  <HelpButton topic="pareto" size="xs" />
+                </div>
                 {models.map((m, mi) => {
                   const fit = fits[mi];
                   const col = modelColors[mi % modelColors.length];
@@ -3099,35 +3473,93 @@ export default function PlanFactoriel() {
                         <span className={`size-2.5 rounded-full ${col.dot}`} />
                         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{m.name} — Diagramme de Pareto des effets</h3>
                       </div>
+                      {/* ── Diagramme de Pareto ── */}
                       <div className="space-y-2">
-                        {effects.map((ef, i) => {
-                          const barPct = maxAbs > 0 ? ef.absCoeff / maxAbs * 100 : 0;
-                          const isSignif = ef.p !== null && ef.p < 0.05;
-                          const isPos = ef.coeff >= 0;
+                        {(() => {
+                          // Calcul du seuil de coupure p=0.05
+                          const dfE = fit.dfE;
+                          const seMean = fit.seCoeffs?.slice(1).length > 0
+                            ? fit.seCoeffs.slice(1).reduce((s,v)=>s+v,0) / fit.seCoeffs.slice(1).length
+                            : null;
+                          const tCrit = dfE >= 1 ? tCritical(dfE) : null;
+                          const threshold = tCrit && seMean ? tCrit * seMean : null;
+                          const thresholdPct = threshold && maxAbs > 0 ? (threshold / maxAbs) * 100 : null;
+                          const thresholdVisible = thresholdPct !== null && thresholdPct <= 100;
+
                           return (
-                            <div key={ef.term} className="flex items-center gap-3">
-                              <span className="w-20 text-right text-xs font-mono text-gray-500 dark:text-gray-400 shrink-0">{ef.label}</span>
-                              <div className="flex-1 h-6 bg-gray-100 dark:bg-gray-800 rounded overflow-hidden relative">
-                                <div
-                                  className={`h-full rounded transition-all ${isSignif ? (isPos ? "bg-indigo-500" : "bg-red-400") : (isPos ? "bg-indigo-200 dark:bg-indigo-800" : "bg-red-200 dark:bg-red-900")}`}
-                                  style={{ width: `${barPct}%` }}
-                                />
-                                <span className="absolute inset-y-0 right-2 flex items-center text-[11px] font-mono font-semibold text-gray-600 dark:text-gray-300">
-                                  {fmt(ef.coeff, 4)}
-                                </span>
+                            <>
+                              {effects.map((ef) => {
+                                const barPct = maxAbs > 0 ? (ef.absCoeff / maxAbs) * 100 : 0;
+                                const isSignif = ef.p !== null && ef.p < 0.05;
+                                return (
+                                  <div key={ef.term} className="flex items-center gap-2">
+                                    <span className="text-[11px] font-mono text-gray-500 dark:text-gray-400 w-20 truncate text-right shrink-0">
+                                      {ef.label}
+                                    </span>
+                                    <div className="flex-1 relative h-5 bg-gray-100 dark:bg-gray-800 rounded overflow-visible">
+                                      {/* Barre */}
+                                      <div
+                                        className={`absolute left-0 top-0 h-full rounded transition-all ${
+                                          isSignif
+                                            ? (ef.coeff >= 0 ? "bg-indigo-500" : "bg-indigo-400")
+                                            : "bg-gray-300 dark:bg-gray-600"
+                                        }`}
+                                        style={{ width: `${barPct}%` }}
+                                      />
+                                      {/* Ligne rouge — seuil p=0.05 — visible dans le graphe */}
+                                      {thresholdVisible && (
+                                        <div
+                                          className="absolute top-0 bottom-0 w-0.5 bg-red-500 z-10"
+                                          style={{ left: `${thresholdPct}%` }}
+                                          title={`Seuil p=0.05 : |b| = ${threshold.toFixed(3)}`}
+                                        />
+                                      )}
+                                    </div>
+                                    <span className="text-[10px] font-mono text-gray-400 w-14 text-right shrink-0">
+                                      {ef.absCoeff.toFixed(3)}
+                                    </span>
+                                    {ef.p !== null && (
+                                      <span className={`text-[10px] font-mono w-12 text-right shrink-0 ${
+                                        isSignif ? "text-indigo-600 dark:text-indigo-300 font-semibold" : "text-gray-400"
+                                      }`}>
+                                        {ef.p < 0.001 ? "<0.001" : ef.p.toFixed(3)}
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
+
+                              {/* Légende et message sous le diagramme */}
+                              <div className="mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1">
+                                {thresholdVisible ? (
+                                  <p className="text-[10px] text-gray-500 flex items-center gap-1">
+                                    <span className="inline-block w-3 border-t-2 border-red-500"/>
+                                    Ligne rouge = seuil de significativité p = 0.05
+                                    {threshold && <span className="font-mono ml-1">(|b| = {threshold.toFixed(3)}, t = {tCritical(dfE).toFixed(2)}, dfE = {dfE})</span>}
+                                  </p>
+                                ) : threshold ? (
+                                  <div className="rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 px-3 py-2">
+                                    <p className="text-[11px] text-amber-700 dark:text-amber-300 font-medium">
+                                      ⚠ Seuil p = 0.05 hors graphe — modèle sur-paramétré
+                                    </p>
+                                    <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-0.5">
+                                      Avec dfE = {dfE}, le quantile de Student est t = {tCritical(dfE).toFixed(2)},
+                                      soit un seuil de {threshold.toFixed(3)} bien supérieur à la plus grande barre ({maxAbs.toFixed(3)}).
+                                      Aucun coefficient n'est statistiquement significatif.
+                                      Réduire le nombre de termes ou augmenter le nombre d'essais.
+                                    </p>
+                                  </div>
+                                ) : (
+                                  <p className="text-[10px] text-gray-400">dfE insuffisant pour calculer le seuil.</p>
+                                )}
+                                <p className="text-[10px] text-gray-400">
+                                  Barres <span className="text-indigo-500">bleues</span> = effets significatifs (p &lt; 0.05) ·
+                                  Barres <span className="text-gray-400">grises</span> = non significatifs
+                                </p>
                               </div>
-                              <span className={`w-12 text-[11px] font-mono text-right shrink-0 ${isSignif ? "text-indigo-600 dark:text-indigo-300 font-semibold" : "text-gray-400"}`}>
-                                {fmtP(ef.p)}
-                              </span>
-                              <span className="w-6 text-amber-500 font-bold text-xs shrink-0">{sigStars(ef.p)}</span>
-                            </div>
+                            </>
                           );
-                        })}
-                      </div>
-                      <div className="mt-3 flex gap-4 text-[10px] text-gray-400">
-                        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-indigo-500" /> Positif significatif (p&lt;0.05)</span>
-                        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-red-400" /> Négatif significatif</span>
-                        <span className="flex items-center gap-1"><span className="inline-block w-3 h-3 rounded bg-indigo-200 dark:bg-indigo-800" /> Non significatif</span>
+                        })()}
                       </div>
                     </div>
                   );
@@ -3138,6 +3570,10 @@ export default function PlanFactoriel() {
             {/* ── TAB : ISORÉPONSES ── */}
             {part4Tab === "isoresponse" && (
               <div className="space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">Courbes isoréponses</h3>
+                  <HelpButton topic="isoreponse" size="xs" />
+                </div>
                 {models.map((m, mi) => {
                   const fit = fits[mi];
                   const col = modelColors[mi % modelColors.length];
@@ -3161,12 +3597,18 @@ export default function PlanFactoriel() {
                 {models.map((m, mi) => {
                   const fit = fits[mi];
                   const col = modelColors[mi % modelColors.length];
-                  if (!fit) return (
+                  return (
                     <div key={m.id} className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5`}>
-                      <p className="text-sm text-red-500">Calcul impossible.</p>
+                      <div className="flex items-center gap-2 mb-4">
+                        <span className={`size-2.5 rounded-full ${col.dot}`} />
+                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                          {m.name} — Surface de réponse 3D
+                        </h3>
+                        <HelpButton topic="isoreponse" size="xs" className="ml-auto" />
+                      </div>
+                      <Surface3D model={m} fit={fit} factors={factors} col={col} response={activeResp} />
                     </div>
                   );
-                  return <Surface3DPanel key={m.id} model={m} fit={fit} factors={factors} col={col} />;
                 })}
               </div>
             )}
@@ -3197,5 +3639,6 @@ export default function PlanFactoriel() {
         );
       })()}
     </div>
+    </HelpProvider>
   );
 }
