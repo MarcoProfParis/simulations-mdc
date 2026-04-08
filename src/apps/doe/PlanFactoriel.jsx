@@ -1722,6 +1722,8 @@ export default function PlanFactoriel() {
   const [importedExamples, setImportedExamples] = useState([]);
   const [editMode, setEditMode] = useState(false);
   const [editMeta, setEditMeta] = useState({ id: "", title: "", context: "", difficulty: "débutant", real_data: false, source: "" });
+  const [validationHelpFit, setValidationHelpFit] = useState(null); // { fit, modelName }
+  const [improvementHelpFit, setImprovementHelpFit] = useState(null); // { fit, verdict, modelName, modelTerms }
 
   const loadExample = async (ex) => {
     setLoadError(null);
@@ -3422,7 +3424,20 @@ export default function PlanFactoriel() {
                       </div>
                       {/* Verdict détaillé */}
                       <div className={`rounded-lg p-3 ${verdict === "acceptable" ? "bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-700" : verdict === "à rejeter" ? "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700" : "bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700"}`}>
-                        <p className="text-xs font-medium text-gray-700 dark:text-gray-200 mb-1">Analyse de validation</p>
+                        <div className="flex items-center justify-between mb-2">
+                          <p className="text-xs font-medium text-gray-700 dark:text-gray-200">Analyse de validation</p>
+                          <button
+                            type="button"
+                            onClick={() => setValidationHelpFit({ fit, modelName: m.name })}
+                            className="inline-flex items-center gap-1 text-[10px] text-indigo-500 hover:text-indigo-700 dark:text-indigo-400 dark:hover:text-indigo-300 transition-colors"
+                            title="Aide : comprendre ces calculs avec vos valeurs"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="size-3.5">
+                              <path fillRule="evenodd" d="M15 8A7 7 0 1 1 1 8a7 7 0 0 1 14 0ZM9 5a1 1 0 1 1-2 0 1 1 0 0 1 2 0ZM6.75 8a.75.75 0 0 0 0 1.5h.75v1.75a.75.75 0 0 0 1.5 0v-2.5A.75.75 0 0 0 8.25 8h-1.5Z" clipRule="evenodd"/>
+                            </svg>
+                            Comment sont calculés ces indicateurs ?
+                          </button>
+                        </div>
                         <ul className="text-xs space-y-1">
                           <li className={`flex items-start gap-1.5 ${R2ok ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>
                             <span>{R2ok ? "✓" : "△"}</span>
@@ -3437,6 +3452,24 @@ export default function PlanFactoriel() {
                             <span>Degrés de liberté résidus : {fit.dfE} {fit.dfE < 2 ? "⚠ trop peu pour une analyse fiable" : ""}</span>
                           </li>
                         </ul>
+
+                        {verdict !== "acceptable" && (
+                          <div className="mt-2 pt-2 border-t border-red-200 dark:border-red-800/50 flex items-center justify-between">
+                            <span className="text-[10px] text-red-600 dark:text-red-400 font-medium">
+                              Ce modèle ne peut pas être utilisé en l'état.
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setImprovementHelpFit({ fit, verdict, modelName: m.name, modelTerms: m.terms })}
+                              className="inline-flex items-center gap-1.5 text-[10px] font-medium text-white bg-red-500 hover:bg-red-600 dark:bg-red-700 dark:hover:bg-red-600 px-2.5 py-1 rounded-md transition-colors"
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="size-3">
+                                <path d="M8 1a.75.75 0 0 1 .75.75V6h4.5a.75.75 0 0 1 0 1.5h-4.5v4.25a.75.75 0 0 1-1.5 0V7.5H2.75a.75.75 0 0 1 0-1.5h4.5V1.75A.75.75 0 0 1 8 1Z"/>
+                              </svg>
+                              Comment améliorer ce modèle ?
+                            </button>
+                          </div>
+                        )}
                       </div>
 
                       {/* Prédiction interactive */}
@@ -3636,6 +3669,257 @@ export default function PlanFactoriel() {
               </div>
             </div>
           </>
+        );
+      })()}
+
+      {/* ── Panneau d'aide ANOVA avec valeurs calculées ── */}
+      {validationHelpFit && (() => {
+        const { fit, modelName } = validationHelpFit;
+        const f4 = v => v != null ? (+v).toFixed(4) : "—";
+        const f2 = v => v != null ? (+v).toFixed(2) : "—";
+        const fp = v => v == null ? "—" : v < 0.001 ? "<0.001" : (+v).toFixed(3);
+        return (
+          <div className="fixed inset-0 z-50 bg-black/30 dark:bg-black/50 flex items-end sm:items-center justify-center p-4"
+               onClick={() => setValidationHelpFit(null)}>
+            <div className="bg-white dark:bg-gray-950 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
+                 onClick={e => e.stopPropagation()}>
+              <div className="sticky top-0 bg-indigo-50 dark:bg-indigo-950/60 border-b border-indigo-100 dark:border-indigo-900 px-5 py-4 flex items-center gap-3">
+                <div className="size-9 rounded-lg bg-indigo-100 dark:bg-indigo-900/50 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="size-5 text-indigo-600 dark:text-indigo-400">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 15.75V18m-7.5-6.75h.008v.008H8.25v-.008zm0 2.25h.008v.008H8.25V13.5zm0 2.25h.008v.008H8.25v-.008zm0 2.25h.008v.008H8.25V18zm2.498-6.75h.007v.008h-.007v-.008zm0 2.25h.007v.008h-.007V13.5zm0 2.25h.007v.008h-.007v-.008zm0 2.25h.007v.008h-.007V18z" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-400 mb-0.5">Aide pédagogique — {modelName}</p>
+                  <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Comment sont calculés ces indicateurs ?</h2>
+                </div>
+                <button onClick={() => setValidationHelpFit(null)}
+                  className="size-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="size-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="px-5 py-4 space-y-4 text-xs">
+                <div className="rounded-xl border border-blue-200 dark:border-blue-900 overflow-hidden">
+                  <div className="bg-blue-50 dark:bg-blue-900/30 px-4 py-2 font-semibold text-blue-800 dark:text-blue-300 text-sm">
+                    R² — Coefficient de détermination
+                  </div>
+                  <div className="px-4 py-3 space-y-2">
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 font-mono text-indigo-700 dark:text-indigo-300">
+                      R² = SC_R / SC_T = {f4(fit.SSR)} / {f4(fit.SST)} = <span className="font-bold">{f4(fit.R2)}</span>
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      Fraction de la variabilité totale expliquée par le modèle.
+                      Un R² de {f4(fit.R2)} signifie que le modèle explique {(fit.R2*100).toFixed(1)} % de la variabilité observée.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-blue-200 dark:border-blue-900 overflow-hidden">
+                  <div className="bg-blue-50 dark:bg-blue-900/30 px-4 py-2 font-semibold text-blue-800 dark:text-blue-300 text-sm">
+                    R² ajusté — Ajustement pénalisé
+                  </div>
+                  <div className="px-4 py-3 space-y-2">
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 font-mono text-indigo-700 dark:text-indigo-300 text-[11px]">
+                      R²_adj = 1 − (SC_E/dl_E) / (SC_T/dl_T)<br/>
+                      = 1 − ({f4(fit.SSE)}/{fit.dfE}) / ({f4(fit.SST)}/{fit.n-1})<br/>
+                      = 1 − {f4(fit.MSE)} / {f4(fit.SST/(fit.n-1))}<br/>
+                      = <span className="font-bold">{f4(fit.R2adj)}</span>
+                      {fit.R2adj < 0.8 ? " ← insuffisant (< 0.8)" : " ← bon (≥ 0.8)"}
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      Contrairement à R², il pénalise les termes inutiles. Préférer R² ajusté pour comparer des modèles.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-blue-200 dark:border-blue-900 overflow-hidden">
+                  <div className="bg-blue-50 dark:bg-blue-900/30 px-4 py-2 font-semibold text-blue-800 dark:text-blue-300 text-sm">
+                    F — Statistique de Fisher
+                  </div>
+                  <div className="px-4 py-3 space-y-2">
+                    <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-3 font-mono text-indigo-700 dark:text-indigo-300 text-[11px]">
+                      CM_R = SC_R / dl_R = {f4(fit.SSR)} / {fit.dfR} = {f4(fit.MSR)}<br/>
+                      CM_E = SC_E / dl_E = {f4(fit.SSE)} / {fit.dfE} = {f4(fit.MSE)}<br/>
+                      F = CM_R / CM_E = {f4(fit.MSR)} / {f4(fit.MSE)} = <span className="font-bold">{f2(fit.Fstat)}</span>
+                      {fit.Fstat < 1 ? " ← résidus > régression !" : fit.Fstat < 4 ? " ← faible" : " ← bon (> 4)"}
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      F compare la variance expliquée et la variance résiduelle.
+                      Un F {fit.Fstat >= 4 ? "élevé (" + f2(fit.Fstat) + " > 4) → bon modèle." : "faible (" + f2(fit.Fstat) + " < 4) → le modèle n'explique pas mieux que le hasard."}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-xl border border-blue-200 dark:border-blue-900 overflow-hidden">
+                  <div className="bg-blue-50 dark:bg-blue-900/30 px-4 py-2 font-semibold text-blue-800 dark:text-blue-300 text-sm">
+                    Prob &gt; F — p-valeur du modèle
+                  </div>
+                  <div className="px-4 py-3 space-y-2">
+                    <div className={`rounded-lg p-3 font-mono text-[11px] ${
+                      fit.pF < 0.05
+                        ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300"
+                        : "bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300"
+                    }`}>
+                      Prob &gt; F = {fp(fit.pF)}
+                      {fit.pF < 0.05
+                        ? " ← modèle significatif ✓ (< 0.05)"
+                        : " ← modèle non significatif ✗ (≥ 0.05)"}
+                    </div>
+                    <p className="text-gray-500 dark:text-gray-400">
+                      Probabilité d'observer un F aussi grand par hasard si le modèle n'avait aucun effet.
+                      {fit.pF < 0.05
+                        ? ` Ici ${fp(fit.pF)} < 0.05 → moins de 5 % de chance que ce soit dû au hasard.`
+                        : ` Ici ${fp(fit.pF)} ≥ 0.05 → probabilité trop élevée, le modèle n'est pas fiable.`}
+                    </p>
+                  </div>
+                </div>
+
+                {fit.dfE < 3 && (
+                  <div className="rounded-xl border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+                    <p className="font-semibold text-amber-700 dark:text-amber-300 mb-1">
+                      ⚠ Degrés de liberté résidus = {fit.dfE}
+                    </p>
+                    <p className="text-amber-600 dark:text-amber-400">
+                      dl_E = n − p − 1 = {fit.n} − {fit.p-1} − 1 = {fit.dfE}.
+                      Avec aussi peu de degrés de liberté, tous les tests statistiques sont peu fiables.
+                      Il faut au minimum 3–5 degrés de liberté résiduels.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 text-center text-[10px] text-gray-400">
+                Basé sur le référentiel BTS Métiers de la Chimie — Plans d'expériences
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── Panneau "Comment améliorer ce modèle ?" ── */}
+      {improvementHelpFit && (() => {
+        const { fit, modelName, modelTerms } = improvementHelpFit;
+        const nsTerms = modelTerms.filter((_, i) => {
+          const p = fit.pCoeffs?.[i + 1];
+          return p != null && p >= 0.05;
+        });
+        const dfTooLow   = fit.dfE < 3;
+        const probTooHigh = fit.pF == null || fit.pF >= 0.05;
+        const r2TooLow   = fit.R2adj < 0.8;
+        const fTooLow    = fit.Fstat < 1;
+        const fp = v => v == null ? "—" : v < 0.001 ? "<0.001" : (+v).toFixed(3);
+
+        return (
+          <div className="fixed inset-0 z-50 bg-black/30 dark:bg-black/50 flex items-end sm:items-center justify-center p-4"
+               onClick={() => setImprovementHelpFit(null)}>
+            <div className="bg-white dark:bg-gray-950 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto"
+                 onClick={e => e.stopPropagation()}>
+              <div className="sticky top-0 bg-red-50 dark:bg-red-950/60 border-b border-red-100 dark:border-red-900 px-5 py-4 flex items-center gap-3">
+                <div className="size-9 rounded-lg bg-red-100 dark:bg-red-900/50 flex items-center justify-center">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="size-5 text-red-600 dark:text-red-400">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.496-3.03c.317-.384.74-.626 1.208-.766M11.42 15.17l-4.655 5.653a2.548 2.548 0 11-3.586-3.586l6.837-5.63m5.108-.233c.55-.164 1.163-.188 1.743-.14a4.5 4.5 0 004.486-6.336l-3.276 3.277a3.004 3.004 0 01-2.25-2.25l3.276-3.276a4.5 4.5 0 00-6.336 4.486c.091 1.076-.071 2.264-.904 2.95l-.102.085" />
+                  </svg>
+                </div>
+                <div className="flex-1">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-red-400 mb-0.5">Diagnostic — {modelName}</p>
+                  <h2 className="text-sm font-semibold text-gray-900 dark:text-white">Comment améliorer ce modèle ?</h2>
+                </div>
+                <button onClick={() => setImprovementHelpFit(null)}
+                  className="size-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" className="size-5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              <div className="px-5 py-4 space-y-3 text-xs">
+                <div className="rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 px-4 py-3">
+                  <p className="font-semibold text-red-700 dark:text-red-300 mb-2">Problèmes détectés :</p>
+                  <ul className="space-y-1 text-red-600 dark:text-red-400">
+                    {dfTooLow    && <li>✗ dl résidus = {fit.dfE} (trop faible — minimum recommandé : 3)</li>}
+                    {probTooHigh && <li>✗ Prob &gt; F = {fp(fit.pF)} (≥ 0.05 → modèle non significatif)</li>}
+                    {r2TooLow    && <li>✗ R² ajusté = {(+fit.R2adj).toFixed(3)} (&lt; 0.8 → ajustement insuffisant)</li>}
+                    {fTooLow     && <li>✗ F = {(+fit.Fstat).toFixed(2)} (&lt; 1 → résidus &gt; régression)</li>}
+                    {nsTerms.length > 0 && <li>△ {nsTerms.length} terme(s) non significatif(s) : {nsTerms.join(", ")}</li>}
+                  </ul>
+                </div>
+
+                <p className="font-semibold text-gray-700 dark:text-gray-200">Pistes d'amélioration :</p>
+
+                {dfTooLow && (
+                  <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+                    <p className="font-semibold text-amber-700 dark:text-amber-300 mb-1">1. Réduire le nombre de termes</p>
+                    <p className="text-amber-600 dark:text-amber-400 mb-2">
+                      Avec {fit.n} essais et {fit.p - 1} termes, dl_E = {fit.dfE} seulement.
+                      En retirant {Math.max(0, 3 - fit.dfE)} terme(s), dl_E atteindrait {fit.dfE + Math.max(0, 3 - fit.dfE)} → tests fiables.
+                    </p>
+                    <p className="text-amber-600 dark:text-amber-400">
+                      → Aller dans <strong>Partie 3</strong> → choisir un modèle avec moins de termes
+                      (ex: passer de Quadratique à Synergie, ou supprimer les termes les moins significatifs du Pareto).
+                    </p>
+                  </div>
+                )}
+
+                {nsTerms.length > 0 && (
+                  <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/20 px-4 py-3">
+                    <p className="font-semibold text-amber-700 dark:text-amber-300 mb-1">
+                      2. Supprimer les termes non significatifs
+                    </p>
+                    <p className="text-amber-600 dark:text-amber-400 mb-1">
+                      Termes dont Prob &gt; |t| ≥ 0.05 : <span className="font-mono">{nsTerms.join(", ")}</span>
+                    </p>
+                    <p className="text-amber-600 dark:text-amber-400">
+                      → Ces termes n'apportent pas d'information significative. Les retirer libère des dl pour les résidus
+                      et améliore F et R² ajusté.
+                    </p>
+                  </div>
+                )}
+
+                {r2TooLow && !dfTooLow && (
+                  <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-3">
+                    <p className="font-semibold text-blue-700 dark:text-blue-300 mb-1">3. Ajouter des termes de courbure</p>
+                    <p className="text-blue-600 dark:text-blue-400">
+                      R² ajusté faible ({(+fit.R2adj).toFixed(3)}) avec des degrés de liberté suffisants suggère que
+                      le modèle est trop simple. Essayer un modèle avec des termes quadratiques (X²) si des points
+                      centraux sont disponibles.
+                    </p>
+                  </div>
+                )}
+
+                {!dfTooLow && !r2TooLow && probTooHigh && (
+                  <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20 px-4 py-3">
+                    <p className="font-semibold text-blue-700 dark:text-blue-300 mb-1">3. Vérifier les données</p>
+                    <p className="text-blue-600 dark:text-blue-400">
+                      Avec R² ajusté = {(+fit.R2adj).toFixed(3)} et Prob &gt; F = {fp(fit.pF)}, la variabilité
+                      expérimentale est peut-être trop grande. Vérifier :
+                    </p>
+                    <ul className="mt-1 space-y-0.5 text-blue-600 dark:text-blue-400 ml-3">
+                      <li>• Saisie correcte des valeurs de réponse</li>
+                      <li>• Absence de valeurs aberrantes (voir onglet Résidus)</li>
+                      <li>• Répétabilité des essais (points centraux)</li>
+                    </ul>
+                  </div>
+                )}
+
+                <div className="rounded-lg border border-indigo-200 dark:border-indigo-800 bg-indigo-50 dark:bg-indigo-900/20 px-4 py-3">
+                  <p className="font-semibold text-indigo-700 dark:text-indigo-300 mb-1">Rappel : règle de décision</p>
+                  <ul className="space-y-0.5 text-indigo-600 dark:text-indigo-400">
+                    <li>✓ Prob &gt; F &lt; 0.05 → modèle significatif</li>
+                    <li>✓ R² ajusté ≥ 0.80 → bon ajustement</li>
+                    <li>✓ dl résidus ≥ 3 → tests fiables</li>
+                    <li>✓ Résidus bien répartis (voir onglet Résidus)</li>
+                  </ul>
+                </div>
+              </div>
+
+              <div className="px-5 py-3 border-t border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900 text-center text-[10px] text-gray-400">
+                Basé sur le référentiel BTS Métiers de la Chimie — Plans d'expériences
+              </div>
+            </div>
+          </div>
         );
       })()}
     </div>
