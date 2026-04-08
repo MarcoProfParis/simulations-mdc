@@ -2632,7 +2632,9 @@ export default function PlanFactoriel() {
                   <tr className="border-b border-gray-100 dark:border-gray-800">
                     <th className="text-[11px] font-medium text-gray-400 pb-2 px-2 w-8 text-center">#</th>
                     {factors.map(f => (
-                      <th key={f.id} className="text-left text-[11px] font-medium text-gray-400 pb-2 px-2 whitespace-nowrap">
+                      <th key={f.id}
+                        className="px-2 py-2 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-medium text-center text-xs whitespace-nowrap"
+                        style={{ minWidth: "60px", maxWidth: "80px" }}>
                         {f.id}<br />
                         <span className="text-[10px] font-normal text-gray-300 dark:text-gray-600">{f.name}{f.unit ? ` (${f.unit})` : ""}</span>
                       </th>
@@ -2659,15 +2661,15 @@ export default function PlanFactoriel() {
                           const cLabel = c === 0 ? "0" : c === -1 ? "−1" : "+1";
                           const cCls = c === -1 ? "text-red-500 dark:text-red-400" : c === 1 ? "text-emerald-600 dark:text-emerald-400" : "text-amber-500";
                           if (row.center && !f.continuous) return (
-                            <td key={f.id} className="px-2 py-1.5 text-center text-xs text-gray-300 dark:text-gray-600">—</td>
+                            <td key={f.id} className="px-2 py-1.5 border border-gray-100 dark:border-gray-800 text-center font-mono text-xs whitespace-nowrap text-gray-300 dark:text-gray-600">—</td>
                           );
                           return (
-                            <td key={f.id} className="px-2 py-1.5">
-                              <div className="flex items-center gap-1">
-                                <span className={`font-mono text-[10px] w-6 shrink-0 ${cCls}`}>({cLabel})</span>
+                            <td key={f.id} className="px-2 py-1.5 border border-gray-100 dark:border-gray-800 text-center font-mono text-xs whitespace-nowrap">
+                              <div className="flex items-center justify-center gap-1">
+                                <span className={`font-mono text-[10px] shrink-0 ${cCls}`}>({cLabel})</span>
                                 {f.continuous
                                   ? <input type="number" value={rv} onChange={e => updateCell(ri, f.id, e.target.value)}
-                                      className="w-14 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-gray-700 dark:text-gray-200 hover:border-gray-200 dark:hover:border-gray-700 focus:outline-none focus:border-indigo-400 transition-colors" />
+                                      className="w-14 rounded border border-transparent bg-transparent px-1 py-0.5 text-xs text-gray-700 dark:text-gray-200 hover:border-gray-200 dark:hover:border-gray-700 focus:outline-none focus:border-indigo-400 transition-colors text-center" />
                                   : <span className="text-xs text-gray-500 dark:text-gray-400">{rv ?? "—"}</span>
                                 }
                               </div>

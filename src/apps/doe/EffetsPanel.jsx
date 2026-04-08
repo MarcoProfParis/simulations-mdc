@@ -6,7 +6,7 @@
 //   - la formule détaillée avec les vraies valeurs numériques
 //   - le coefficient résultant et son interprétation
 
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 // ─── Utilitaire : signe d'un terme pour un essai ─────────────────────────────
 function getSign(row, termFactors, factors) {
@@ -22,6 +22,29 @@ function getSign(row, termFactors, factors) {
 // ─── Composant principal ──────────────────────────────────────────────────────
 export default function EffetsPanel({ model, fit, matrix, factors, responses, activeResp, col }) {
   const [selectedTerm, setSelectedTerm] = useState(null);
+  const [showCalcPopup, setShowCalcPopup] = useState(false);
+  const [popupPos, setPopupPos] = useState({ x: 80, y: 120 });
+  const dragRef = useRef(null);
+  const popupRef = useRef(null);
+
+  // Drag de la popup
+  useEffect(() => {
+    if (!showCalcPopup) return;
+    const onMove = (e) => {
+      if (!dragRef.current) return;
+      setPopupPos(prev => ({
+        x: prev.x + e.movementX,
+        y: prev.y + e.movementY,
+      }));
+    };
+    const onUp = () => { dragRef.current = false; };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [showCalcPopup]);
 
   // Filtrer les lignes actives avec une vraie valeur de réponse
   const validRows = (matrix || []).filter(row => {
@@ -104,6 +127,47 @@ export default function EffetsPanel({ model, fit, matrix, factors, responses, ac
             Aucun terme linéaire ou d'interaction dans le modèle actuel.
           </p>
         )}
+        {/* Mini-tableau récapitulatif des niveaux */}
+        {factors.filter(f => f.continuous).length > 0 && (
+          <div className="mt-4 overflow-x-auto">
+            <table className="text-xs border-collapse w-auto">
+              <thead>
+                <tr>
+                  <th className="px-2 py-1 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-500 text-left font-medium">
+                    Facteur
+                  </th>
+                  <th className="px-2 py-1 border border-gray-200 dark:border-gray-700 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 font-medium text-center">
+                    −1
+                  </th>
+                  <th className="px-2 py-1 border border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 text-gray-500 font-medium text-center">
+                    0
+                  </th>
+                  <th className="px-2 py-1 border border-gray-200 dark:border-gray-700 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 font-medium text-center">
+                    +1
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {factors.filter(f => f.continuous).map(f => (
+                  <tr key={f.id}>
+                    <td className="px-2 py-1 border border-gray-200 dark:border-gray-700 font-mono text-gray-700 dark:text-gray-300">
+                      {f.id} — {f.name}{f.unit ? ` (${f.unit})` : ""}
+                    </td>
+                    <td className="px-2 py-1 border border-gray-200 dark:border-gray-700 bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 text-center font-mono">
+                      {f.low.real}
+                    </td>
+                    <td className="px-2 py-1 border border-gray-200 dark:border-gray-700 text-gray-500 text-center font-mono">
+                      {+((f.low.real + f.high.real) / 2).toFixed(2)}
+                    </td>
+                    <td className="px-2 py-1 border border-gray-200 dark:border-gray-700 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 text-center font-mono">
+                      {f.high.real}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       {/* ── Contenu du calcul ── */}
@@ -183,8 +247,8 @@ export default function EffetsPanel({ model, fit, matrix, factors, responses, ac
                         )}
                         <td className={`px-3 py-1.5 border text-center font-semibold ${
                           isPlus
-                            ? "bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-400 border-amber-200 dark:border-amber-900/50"
-                            : "bg-gray-50 dark:bg-gray-800/50 text-gray-600 dark:text-gray-300 border-gray-100 dark:border-gray-800"
+                            ? "bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-400 border-emerald-200 dark:border-emerald-900/50"
+                            : "bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 border-red-100 dark:border-red-900/50"
                         }`}>
                           {yVal.toFixed(2)}
                         </td>
@@ -265,6 +329,21 @@ export default function EffetsPanel({ model, fit, matrix, factors, responses, ac
               <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">
                 Étape 3 — Calcul de l'effet = coefficient b
               </p>
+
+              <div className="flex justify-end mb-3">
+                <button
+                  onClick={() => {
+                    setPopupPos({ x: 80, y: 120 });
+                    setShowCalcPopup(true);
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors shadow-sm"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="size-3.5">
+                    <path d="M2 3a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3ZM2 7.5h5v5H3a1 1 0 0 1-1-1v-4ZM8.5 7.5v5H13a1 1 0 0 1 1-1v-4H8.5Z"/>
+                  </svg>
+                  Montrer les calculs
+                </button>
+              </div>
 
               {/* Formule */}
               <div className="flex items-center flex-wrap gap-3 mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -347,6 +426,101 @@ export default function EffetsPanel({ model, fit, matrix, factors, responses, ac
             </div>
           )}
         </>
+      )}
+
+      {/* ── Popup draggable "Calcul complet" ── */}
+      {showCalcPopup && effet !== null && (
+        <div
+          ref={popupRef}
+          style={{
+            position: "fixed",
+            left: popupPos.x,
+            top: popupPos.y,
+            zIndex: 300,
+            width: 340,
+            background: "var(--bg, #fff)",
+            border: "1.5px solid #6366f1",
+            borderRadius: 12,
+            boxShadow: "0 8px 32px rgba(0,0,0,0.18)",
+            userSelect: "none",
+          }}
+        >
+          {/* Header draggable */}
+          <div
+            onMouseDown={() => { dragRef.current = true; }}
+            style={{ cursor: "grab", padding: "10px 14px", borderBottom: "1px solid #e5e7eb",
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              background: "#eef2ff", borderRadius: "10px 10px 0 0" }}
+          >
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#4338ca" }}>
+              ✦ Calcul — {term}
+            </span>
+            <button
+              onMouseDown={e => e.stopPropagation()}
+              onClick={() => setShowCalcPopup(false)}
+              style={{ fontSize: 16, lineHeight: 1, background: "none", border: "none",
+                color: "#6b7280", cursor: "pointer", padding: "0 2px" }}
+            >
+              ×
+            </button>
+          </div>
+
+          {/* Contenu compact */}
+          <div style={{ padding: "12px 14px", fontSize: 12 }}>
+
+            {/* Résultat principal */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10,
+              padding: "8px 12px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
+              <span style={{ fontFamily: "monospace", color: "#374151" }}>b = </span>
+              <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: 16,
+                color: effet > 0 ? "#15803d" : effet < 0 ? "#dc2626" : "#6b7280" }}>
+                {effet > 0 ? "+" : ""}{(+effet).toFixed(3)}
+              </span>
+              {activeResp?.unit && (
+                <span style={{ fontSize: 10, color: "#9ca3af" }}>{activeResp.unit}</span>
+              )}
+            </div>
+
+            {/* Formule */}
+            <div style={{ fontFamily: "monospace", fontSize: 11, color: "#374151", marginBottom: 8 }}>
+              <div style={{ marginBottom: 4, color: "#6b7280", fontSize: 10, textTransform: "uppercase", letterSpacing: 1 }}>
+                Formule
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                <span>b =</span>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <span style={{ borderBottom: "1px solid #9ca3af", paddingBottom: 1, color: "#15803d" }}>
+                    {(+moyPlus).toFixed(2)} − {(+moyMinus).toFixed(2)}
+                  </span>
+                  <span style={{ color: "#6b7280", paddingTop: 1 }}>2</span>
+                </div>
+                <span>=</span>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                  <span style={{ borderBottom: "1px solid #9ca3af", paddingBottom: 1 }}>
+                    {(+(moyPlus - moyMinus)).toFixed(2)}
+                  </span>
+                  <span style={{ color: "#6b7280", paddingTop: 1 }}>2</span>
+                </div>
+                <span>=</span>
+                <span style={{ fontWeight: 700, color: effet > 0 ? "#15803d" : "#dc2626" }}>
+                  {(+effet).toFixed(3)}
+                </span>
+              </div>
+            </div>
+
+            {/* Interprétation courte */}
+            <div style={{ fontSize: 11, color: "#374151", padding: "6px 10px",
+              background: Math.abs(effet) < 0.3 ? "#f9fafb" : effet > 0 ? "#eff6ff" : "#fef2f2",
+              borderRadius: 6, borderLeft: `3px solid ${Math.abs(effet) < 0.3 ? "#d1d5db" : effet > 0 ? "#6366f1" : "#ef4444"}` }}>
+              {Math.abs(effet) < 0.3
+                ? `Effet faible → ${termFactors.map(f => f.name).join(" × ")} peu influent.`
+                : effet > 0
+                ? `Effet positif → augmenter ${isInteraction ? "l'interaction" : termFactors[0]?.name} augmente ${activeResp?.name || "Y"}.`
+                : `Effet négatif → augmenter ${isInteraction ? "l'interaction" : termFactors[0]?.name} diminue ${activeResp?.name || "Y"}.`
+              }
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
