@@ -1685,13 +1685,155 @@ function IsoResponsePanel({ model, fit, factors, modelColors }) {
   );
 }
 
+// ── Sous-composant modal Nouveau plan ────────────────────────────────────────
+function BtnNum({ current, onSelect }) {
+  const nums = [1, 2, 3, 4, 5, 6];
+  return (
+    <div className="flex items-center gap-1.5 flex-wrap">
+      {nums.map(n => (
+        <button key={n} type="button"
+          onClick={() => onSelect(n)}
+          className={`w-8 h-8 rounded-lg border text-xs font-semibold transition-colors ${
+            current === n
+              ? "bg-indigo-600 border-indigo-600 text-white"
+              : "border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+          }`}>{n}</button>
+      ))}
+      <button type="button"
+        onClick={() => onSelect(Math.min(current + 1, 12))}
+        className={`px-2 h-8 rounded-lg border text-xs font-semibold transition-colors ${
+          current > 6
+            ? "bg-indigo-600 border-indigo-600 text-white"
+            : "border-gray-200 dark:border-gray-700 text-gray-500 hover:border-indigo-300 hover:bg-indigo-50 dark:hover:bg-indigo-900/20"
+        }`}>
+        {current > 6 ? current : "+"}
+      </button>
+      {current > 6 && (
+        <button type="button"
+          onClick={() => onSelect(Math.max(current - 1, 7))}
+          className="px-2 h-8 rounded-lg border border-gray-200 dark:border-gray-700 text-xs text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-800">
+          −1
+        </button>
+      )}
+    </div>
+  );
+}
+
+function NewPlanModal({ open, config, onChange, onConfirm, onClose }) {
+  if (!open) return null;
+  const { title, context, difficulty, real_data, nFactors, nResponses } = config;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/50">
+      <div className="w-full max-w-md rounded-2xl bg-white dark:bg-gray-900 shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-sm font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+            <PlusIcon className="size-4 text-emerald-500" />
+            Nouveau plan d'expériences
+          </h2>
+          <button onClick={onClose} className="rounded-md p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+            <XMarkIcon className="size-5" />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Titre</label>
+            <input
+              type="text"
+              value={title}
+              onChange={e => onChange({ ...config, title: e.target.value })}
+              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Mon plan d'expériences"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Contexte (optionnel)</label>
+            <input
+              type="text"
+              value={context}
+              onChange={e => onChange({ ...config, context: e.target.value })}
+              className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              placeholder="Ex: 3 facteurs · Rendement d'une réaction"
+            />
+          </div>
+
+          <div className="flex gap-3">
+            <div className="flex-1">
+              <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">Niveau</label>
+              <select
+                value={difficulty}
+                onChange={e => onChange({ ...config, difficulty: e.target.value })}
+                className="w-full rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              >
+                <option value="débutant">Débutant</option>
+                <option value="intermédiaire">Intermédiaire</option>
+                <option value="avancé">Avancé</option>
+              </select>
+            </div>
+            <div className="flex flex-col justify-end pb-2">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={real_data}
+                  onChange={e => onChange({ ...config, real_data: e.target.checked })}
+                  className="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-xs text-gray-500 dark:text-gray-400">Données réelles</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">
+              Nombre de facteurs
+              {nFactors > 6 && (
+                <span className="ml-2 text-amber-600 dark:text-amber-400">
+                  ⚠ Plan large — {Math.pow(2, nFactors)} essais
+                </span>
+              )}
+            </label>
+            <BtnNum current={nFactors} onSelect={n => onChange({ ...config, nFactors: n })} />
+          </div>
+
+          <div>
+            <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-2">Nombre de réponses</label>
+            <BtnNum current={nResponses} onSelect={n => onChange({ ...config, nResponses: Math.min(n, 6) })} />
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+          <button onClick={onClose}
+            className="rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2 text-sm text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors">
+            Annuler
+          </button>
+          <button onClick={() => onConfirm(config)}
+            className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-500 transition-colors">
+            Créer le plan →
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── composant principal ──────────────────────────────────────────────────────
 
 export default function PlanFactoriel() {
   const { theme } = useTheme();
   void ChevronDownIcon;
 
-  const [part, setPart] = useState(1);
+  const [part, setPart] = useState(0);
+  const [showNewPlanModal, setShowNewPlanModal] = useState(false);
+  const [newPlanConfig, setNewPlanConfig] = useState({
+    title: "Mon plan d'expériences",
+    context: "",
+    difficulty: "débutant",
+    real_data: false,
+    nFactors: 2,
+    nResponses: 1,
+  });
   const [factors, setFactors] = useState(DEFAULT_FACTORS.map(f => ({ ...f, low: { ...f.low }, high: { ...f.high } })));
   const [responses, setResponses] = useState(DEFAULT_RESPONSES.map(r => ({ ...r })));
   const [centerPoint, setCenterPoint] = useState({ ...DEFAULT_CENTER });
@@ -2068,6 +2210,49 @@ export default function PlanFactoriel() {
 
   return (
     <HelpProvider>
+    <NewPlanModal
+      open={showNewPlanModal}
+      config={newPlanConfig}
+      onChange={setNewPlanConfig}
+      onClose={() => setShowNewPlanModal(false)}
+      onConfirm={(cfg) => {
+        const newFactors = Array.from({ length: cfg.nFactors }, (_, i) => ({
+          id: `X${i + 1}`,
+          name: `Facteur ${i + 1}`,
+          unit: "",
+          continuous: true,
+          low: { real: 0, coded: -1 },
+          high: { real: 1, coded: 1 },
+        }));
+        const newResponses = Array.from({ length: cfg.nResponses }, (_, i) => ({
+          id: `Y${i + 1}`,
+          name: `Réponse ${i + 1}`,
+          unit: "",
+        }));
+        const newCenter = { present: false, replicates: 1 };
+        const newModelDef = computeDefaultModel(newFactors);
+
+        setFactors(newFactors);
+        setResponses(newResponses);
+        setCenterPoint(newCenter);
+        setModelDefault(newModelDef);
+        setModels([{ id: 1, name: "Modèle 1", terms: [...newModelDef], preset: "default" }]);
+        setActiveModelId(1);
+        setMatrix(null);
+        setExcludedPoints(new Set());
+        setLoadedExampleId(null);
+        setEditMeta({
+          id: "",
+          title: cfg.title,
+          context: cfg.context,
+          difficulty: cfg.difficulty,
+          real_data: cfg.real_data,
+          source: "",
+        });
+        setShowNewPlanModal(false);
+        setPart(1);
+      }}
+    />
     <div className="max-w-4xl mx-auto px-4 py-6">
 
       {/* ── BARRE LATÉRALE ── */}
@@ -2221,6 +2406,7 @@ export default function PlanFactoriel() {
       )}
 
       {/* ── STEPPER ── */}
+      {part > 0 && (
       <nav aria-label="Progression" className="mb-6">
         <ol role="list" className="divide-y divide-gray-300 rounded-md border border-gray-300 md:flex md:divide-y-0 dark:divide-white/15 dark:border-white/15">
           {[
@@ -2270,6 +2456,88 @@ export default function PlanFactoriel() {
           })}
         </ol>
       </nav>
+      )}
+
+      {/* ══════════════════════════════════════════════════════ ACCUEIL */}
+      {part === 0 && (
+        <div className="flex flex-col items-center py-10 gap-8">
+
+          {/* Titre */}
+          <div className="text-center">
+            <div className="w-10 h-1 rounded-full mx-auto mb-4 bg-emerald-500" />
+            <h1 className="text-2xl font-extrabold tracking-tight text-gray-900 dark:text-white mb-1">
+              Plans d'expériences
+            </h1>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Choisissez comment commencer
+            </p>
+          </div>
+
+          {/* 3 cartes */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 w-full max-w-2xl">
+
+            {/* Carte 1 : Nouveau plan */}
+            <button
+              onClick={() => {
+                setNewPlanConfig({
+                  title: "Mon plan d'expériences",
+                  context: "",
+                  difficulty: "débutant",
+                  real_data: false,
+                  nFactors: 2,
+                  nResponses: 1,
+                });
+                setShowNewPlanModal(true);
+              }}
+              className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-6 text-center hover:border-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/10 transition-all group"
+            >
+              <div className="rounded-full bg-emerald-100 dark:bg-emerald-900/30 p-3 group-hover:bg-emerald-200 dark:group-hover:bg-emerald-900/50 transition-colors">
+                <PlusIcon className="size-6 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-800 dark:text-white text-sm">Nouveau plan</p>
+                <p className="text-xs text-gray-400 mt-0.5">Créer depuis zéro</p>
+              </div>
+            </button>
+
+            {/* Carte 2 : Charger JSON */}
+            <label className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-6 text-center hover:border-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/10 transition-all group cursor-pointer">
+              <div className="rounded-full bg-indigo-100 dark:bg-indigo-900/30 p-3 group-hover:bg-indigo-200 dark:group-hover:bg-indigo-900/50 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="size-6 text-indigo-600 dark:text-indigo-400">
+                  <path fillRule="evenodd" d="M11.47 2.47a.75.75 0 0 1 1.06 0l4.5 4.5a.75.75 0 0 1-1.06 1.06l-3.22-3.22V16.5a.75.75 0 0 1-1.5 0V4.81L8.03 8.03a.75.75 0 0 1-1.06-1.06l4.5-4.5ZM3 15.75a.75.75 0 0 1 .75.75v2.25a1.5 1.5 0 0 0 1.5 1.5h13.5a1.5 1.5 0 0 0 1.5-1.5V16.5a.75.75 0 0 1 1.5 0v2.25a3 3 0 0 1-3 3H5.25a3 3 0 0 1-3-3V16.5a.75.75 0 0 1 .75-.75Z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-semibold text-gray-800 dark:text-white text-sm">Charger JSON</p>
+                <p className="text-xs text-gray-400 mt-0.5">Importer un fichier</p>
+              </div>
+              <input
+                type="file"
+                accept=".json"
+                className="sr-only"
+                onChange={e => {
+                  validateAndImport(e.target.files[0]);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+
+            {/* Carte 3 : Exemples */}
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-6 text-center hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-all group"
+            >
+              <div className="rounded-full bg-amber-100 dark:bg-amber-900/30 p-3 group-hover:bg-amber-200 dark:group-hover:bg-amber-900/50 transition-colors">
+                <BookOpenIcon className="size-6 text-amber-600 dark:text-amber-400" />
+              </div>
+              <div>
+                <p className="font-semibold text-gray-800 dark:text-white text-sm">Exemples</p>
+                <p className="text-xs text-gray-400 mt-0.5">Charger un exemple</p>
+              </div>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ══════════════════════════════════════════════════════ PARTIE 1 */}
       {part === 1 && (
@@ -3560,9 +3828,80 @@ export default function PlanFactoriel() {
                                         {ef.p < 0.001 ? "<0.001" : ef.p.toFixed(3)}
                                       </span>
                                     )}
+                                    {/* Bouton × pour retirer le terme du modèle */}
+                                    <button
+                                      onClick={() => {
+                                        const newTerms = m.terms.filter(t => t !== ef.term);
+                                        if (newTerms.length < 1) return;
+                                        setModels(ms => ms.map(x => x.id === m.id
+                                          ? { ...x, terms: newTerms, preset: "custom" }
+                                          : x
+                                        ));
+                                      }}
+                                      title={`Retirer ${ef.label} du modèle`}
+                                      className="shrink-0 rounded-full p-0.5 text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                    >
+                                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="size-3.5">
+                                        <path d="M5.28 4.22a.75.75 0 0 0-1.06 1.06L6.94 8l-2.72 2.72a.75.75 0 1 0 1.06 1.06L8 9.06l2.72 2.72a.75.75 0 1 0 1.06-1.06L9.06 8l2.72-2.72a.75.75 0 0 0-1.06-1.06L8 6.94 5.28 4.22Z" />
+                                      </svg>
+                                    </button>
                                   </div>
                                 );
                               })}
+
+                              {/* ── Zone "Ajouter un terme" ── */}
+                              {(() => {
+                                const nRunsLocal = (matrix || []).length;
+                                const maxTermsLocal = Math.max(1, nRunsLocal - 2);
+                                const canAdd = m.terms.length < maxTermsLocal;
+                                const allAvailable = getAllPossibleTerms(factors).filter(t => {
+                                  if (m.terms.includes(t)) return false;
+                                  if (isQuadPure(t, factors)) return false;
+                                  if (termOrder(t, factors) > 2) return false;
+                                  return true;
+                                });
+                                if (allAvailable.length === 0) return null;
+                                return (
+                                  <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-2">
+                                      Ajouter un terme au modèle
+                                    </p>
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {allAvailable.map(t => (
+                                        <button
+                                          key={t}
+                                          disabled={!canAdd}
+                                          onClick={() => {
+                                            const nR = (matrix || []).length;
+                                            const maxT = Math.max(1, nR - 2);
+                                            if (m.terms.length >= maxT) return;
+                                            setModels(ms => ms.map(x => x.id === m.id
+                                              ? { ...x, terms: [...x.terms, t], preset: "custom" }
+                                              : x
+                                            ));
+                                          }}
+                                          title={!canAdd ? "Limite de termes atteinte" : `Ajouter ${formatTermDisplay(t, factors)}`}
+                                          className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-[11px] font-mono transition-all ${
+                                            canAdd
+                                              ? "border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 cursor-pointer"
+                                              : "border-gray-100 dark:border-gray-800 text-gray-300 dark:text-gray-700 cursor-not-allowed opacity-50"
+                                          }`}
+                                        >
+                                          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 12 12" fill="currentColor" className="size-2.5">
+                                            <path d="M6.75 3a.75.75 0 0 0-1.5 0v2.25H3a.75.75 0 0 0 0 1.5h2.25V9a.75.75 0 0 0 1.5 0V6.75H9a.75.75 0 0 0 0-1.5H6.75V3Z" />
+                                          </svg>
+                                          {formatTermDisplay(t, factors)}
+                                        </button>
+                                      ))}
+                                    </div>
+                                    {!canAdd && (
+                                      <p className="text-[10px] text-amber-600 dark:text-amber-400 mt-1">
+                                        Limite atteinte ({nRunsLocal} essais → max {maxTermsLocal} termes).
+                                      </p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
 
                               {/* Légende et message sous le diagramme */}
                               <div className="mt-3 pt-2 border-t border-gray-100 dark:border-gray-800 space-y-1">
