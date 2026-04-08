@@ -1205,69 +1205,204 @@ function PredictionPanel({ model, fit, factors, col }) {
 
 
 
-function ResidualPlot({ yHat, residuals, color }) {
+function ResidualPlot({ yHat, residuals, MSE, globalIndices, excludedPoints, onExclude, canExclude, color }) {
   const [hovered, setHovered] = React.useState(null);
+  const [clicked, setClicked] = React.useState(null); // index local du point cliqué
+  const svgRef = React.useRef(null);
+
   if (!yHat || yHat.length === 0) return null;
-  const W = 480, H = 220, PAD = 40;
+
+  const W = 560, H = 320, PAD = { l: 52, r: 20, t: 20, b: 40 };
+  const PW = W - PAD.l - PAD.r;
+  const PH = H - PAD.t - PAD.b;
+
   const minX = Math.min(...yHat), maxX = Math.max(...yHat);
-  const minY = Math.min(...residuals), maxY = Math.max(...residuals);
-  const rangeX = maxX - minX || 1, rangeY = Math.max(Math.abs(minY), Math.abs(maxY)) * 2 || 1;
-  const cx = (v) => PAD + (v - minX) / rangeX * (W - 2 * PAD);
-  const cy = (v) => H / 2 - v / (rangeY / 2) * (H / 2 - PAD);
-  const dotColor = color === "bg-indigo-500" ? "#6366f1" : color === "bg-emerald-500" ? "#10b981" : "#f59e0b";
+  const rangeX = maxX - minX || 1;
+  const maxAbsY = Math.max(...residuals.map(Math.abs)) * 1.25 || 1;
+
+  const cx = (v) => PAD.l + (v - minX) / rangeX * PW;
+  const cy = (v) => PAD.t + PH / 2 - (v / maxAbsY) * (PH / 2);
+
+  const dotColor = color === "bg-indigo-500" ? "#6366f1"
+    : color === "bg-emerald-500" ? "#10b981"
+    : "#f59e0b";
+
+  const s = MSE > 0 ? Math.sqrt(MSE) : 1;
+
+  // Grille Y
+  const yTicks = [-maxAbsY * 0.75, -maxAbsY * 0.5, -maxAbsY * 0.25, 0,
+                   maxAbsY * 0.25, maxAbsY * 0.5, maxAbsY * 0.75];
+
+  // Ferme popup si clic hors SVG
+  React.useEffect(() => {
+    if (clicked === null) return;
+    const handler = (e) => {
+      if (svgRef.current && !svgRef.current.contains(e.target)) setClicked(null);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [clicked]);
+
+  // SCE et résidu normé max (affichés sous le graphe)
+  const SCE = residuals.reduce((s, r) => s + r * r, 0);
+  const maxNormed = Math.max(...residuals.map(r => Math.abs(r / s)));
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ maxHeight: 220, overflow: "visible" }}>
-      {/* Ligne zéro */}
-      <line x1={PAD} y1={H / 2} x2={W - PAD} y2={H / 2} stroke="#e5e7eb" strokeWidth="1" />
-      {/* Axe Y */}
-      <line x1={PAD} y1={PAD} x2={PAD} y2={H - PAD} stroke="#e5e7eb" strokeWidth="1" />
-      {/* Zéro label */}
-      <text x={PAD - 6} y={H / 2 + 4} textAnchor="end" fontSize="10" fill="#9ca3af">0</text>
-      {/* Points */}
-      {yHat.map((x, i) => {
-        const px = cx(x), py = cy(residuals[i]);
-        const isHov = hovered === i;
-        return (
-          <g key={i}
-            onMouseEnter={() => setHovered(i)}
-            onMouseLeave={() => setHovered(null)}
-            style={{ cursor: "pointer" }}>
-            {/* Zone de survol plus large */}
-            <circle cx={px} cy={py} r="10" fill="transparent" />
-            {/* Point */}
-            <circle cx={px} cy={py} r={isHov ? 6 : 4} fill={dotColor} fillOpacity={isHov ? 1 : 0.8}
-              stroke={isHov ? "white" : "none"} strokeWidth="1.5"
-              style={{ transition: "r 0.1s" }} />
-            {/* Tooltip au survol */}
-            {isHov && (() => {
-              const tipW = 90, tipH = 36, tipPad = 6;
-              // Position : au-dessus à droite si possible
-              let tx = px + 10;
-              let ty = py - tipH - 6;
-              if (tx + tipW > W - 4) tx = px - tipW - 10;
-              if (ty < 4) ty = py + 10;
-              return (
-                <g>
-                  <rect x={tx} y={ty} width={tipW} height={tipH} rx="4"
-                    fill="white" stroke="#e5e7eb" strokeWidth="0.8"
-                    style={{ filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.12))" }} />
-                  <text x={tx + tipPad} y={ty + 13} fontSize="10" fontWeight="600" fill="#111">
-                    Point {i + 1}
-                  </text>
-                  <text x={tx + tipPad} y={ty + 26} fontSize="9" fill="#6b7280" fontFamily="monospace">
-                    Ŷ={x.toFixed(2)}  r={residuals[i].toFixed(3)}
-                  </text>
-                </g>
-              );
-            })()}
+    <div className="relative">
+      <svg ref={svgRef} viewBox={`0 0 ${W} ${H}`} className="w-full"
+        style={{ maxHeight: 320, overflow: "visible" }}>
+
+        {/* Grille horizontale */}
+        {yTicks.map((v, i) => (
+          <g key={i}>
+            <line x1={PAD.l} y1={cy(v)} x2={W - PAD.r} y2={cy(v)}
+              stroke={v === 0 ? "#9ca3af" : "#f3f4f6"} strokeWidth={v === 0 ? 1.5 : 0.8}
+              strokeDasharray={v === 0 ? "" : "3,3"} />
+            <text x={PAD.l - 5} y={cy(v) + 4} textAnchor="end" fontSize="9"
+              fill={v === 0 ? "#6b7280" : "#d1d5db"} fontFamily="monospace">
+              {v === 0 ? "0" : v.toFixed(1)}
+            </text>
           </g>
+        ))}
+
+        {/* Axe Y */}
+        <line x1={PAD.l} y1={PAD.t} x2={PAD.l} y2={PAD.t + PH}
+          stroke="#e5e7eb" strokeWidth="1" />
+
+        {/* Points */}
+        {yHat.map((x, i) => {
+          const px = cx(x), py = cy(residuals[i]);
+          const isHov = hovered === i;
+          const isSel = clicked === i;
+          const normed = residuals[i] / s;
+          const isLarge = Math.abs(normed) > 2;
+          const ptColor = isLarge ? "#ef4444" : dotColor;
+
+          return (
+            <g key={i}
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered(null)}
+              onClick={(e) => { e.stopPropagation(); setClicked(clicked === i ? null : i); }}
+              style={{ cursor: "pointer" }}>
+              {/* Zone clic élargie */}
+              <circle cx={px} cy={py} r="14" fill="transparent" />
+              {/* Point */}
+              <circle cx={px} cy={py}
+                r={isHov || isSel ? 8 : 6}
+                fill={ptColor}
+                fillOpacity={isHov || isSel ? 1 : 0.82}
+                stroke={isSel ? "white" : isHov ? "white" : "none"}
+                strokeWidth="2"
+                style={{ transition: "r 0.1s" }} />
+              {/* Numéro */}
+              <text x={px} y={py + 4} textAnchor="middle" fontSize="8"
+                fontWeight="700" fill="white" style={{ pointerEvents: "none" }}>
+                {(globalIndices ? globalIndices[i] : i) + 1}
+              </text>
+            </g>
+          );
+        })}
+
+        {/* Labels axes */}
+        <text x={PAD.l + PW / 2} y={H - 4} textAnchor="middle" fontSize="11" fill="#9ca3af">Ŷ (valeur prédite)</text>
+        <text x={10} y={PAD.t + PH / 2} textAnchor="middle" fontSize="11" fill="#9ca3af"
+          transform={`rotate(-90, 10, ${PAD.t + PH / 2})`}>Résidu</text>
+      </svg>
+
+      {/* Popup clic — position absolute par rapport au conteneur */}
+      {clicked !== null && (() => {
+        const i = clicked;
+        const normed = residuals[i] / s;
+        const isLarge = Math.abs(normed) > 2;
+        const gIdx = globalIndices ? globalIndices[i] : i;
+        const isExcluded = excludedPoints?.has(gIdx);
+        const canExcludeThis = canExclude && !isExcluded;
+        return (
+          <div
+            style={{
+              position: "absolute", top: 8, right: 8,
+              zIndex: 200, width: 200,
+              background: "white",
+              border: `2px solid ${isLarge ? "#ef4444" : "#6366f1"}`,
+              borderRadius: 10,
+              boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+              padding: "10px 12px",
+              fontSize: 12,
+            }}
+            className="dark:bg-gray-900"
+          >
+            {/* Header */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
+              <span style={{ fontWeight: 700, color: isLarge ? "#ef4444" : "#4338ca", fontSize: 12 }}>
+                Point {gIdx + 1} {isLarge ? "⚠" : ""}
+              </span>
+              <button onClick={() => setClicked(null)}
+                style={{ background: "none", border: "none", cursor: "pointer", color: "#9ca3af", fontSize: 16, lineHeight: 1 }}>
+                ×
+              </button>
+            </div>
+            {/* Valeurs */}
+            <div style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "3px 8px", fontSize: 11 }}>
+              <span style={{ color: "#6b7280" }}>Y mesuré</span>
+              <span style={{ fontFamily: "monospace", fontWeight: 600 }}>—</span>
+              <span style={{ color: "#6b7280" }}>Ŷ calculé</span>
+              <span style={{ fontFamily: "monospace", fontWeight: 600 }}>{yHat[i].toFixed(3)}</span>
+              <span style={{ color: "#6b7280" }}>Résidu</span>
+              <span style={{ fontFamily: "monospace", fontWeight: 600,
+                color: residuals[i] >= 0 ? "#059669" : "#dc2626" }}>
+                {residuals[i] >= 0 ? "+" : ""}{residuals[i].toFixed(3)}
+              </span>
+              <span style={{ color: "#6b7280" }}>Normé</span>
+              <span style={{ fontFamily: "monospace", fontWeight: 700,
+                color: isLarge ? "#ef4444" : "#374151" }}>
+                {normed >= 0 ? "+" : ""}{normed.toFixed(2)}
+                {isLarge ? " ← aberrant" : ""}
+              </span>
+            </div>
+            {/* Bouton exclure */}
+            <div style={{ marginTop: 10 }}>
+              {isExcluded ? (
+                <button onClick={() => { onExclude(gIdx); setClicked(null); }}
+                  style={{ width: "100%", padding: "5px 0", borderRadius: 6, border: "1px solid #d1d5db",
+                    background: "#f9fafb", color: "#374151", fontSize: 11, cursor: "pointer", fontWeight: 600 }}>
+                  ↩ Réinclure ce point
+                </button>
+              ) : (
+                <button onClick={() => { if (canExcludeThis) { onExclude(gIdx); setClicked(null); } }}
+                  disabled={!canExcludeThis}
+                  style={{ width: "100%", padding: "5px 0", borderRadius: 6, border: "none",
+                    background: canExcludeThis ? "#ef4444" : "#e5e7eb",
+                    color: canExcludeThis ? "white" : "#9ca3af",
+                    fontSize: 11, cursor: canExcludeThis ? "pointer" : "not-allowed", fontWeight: 600 }}>
+                  {canExcludeThis ? "✕ Exclure ce point" : "✕ Exclure (limite atteinte)"}
+                </button>
+              )}
+            </div>
+          </div>
         );
-      })}
-      {/* Labels axes */}
-      <text x={W / 2} y={H - 4} textAnchor="middle" fontSize="10" fill="#9ca3af">Ŷ</text>
-      <text x={8} y={H / 2} textAnchor="middle" fontSize="10" fill="#9ca3af" transform={`rotate(-90, 8, ${H/2})`}>Résidu</text>
-    </svg>
+      })()}
+
+      {/* Indicateurs sous le graphe */}
+      <div className="flex gap-4 mt-2 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-gray-500 dark:text-gray-400">SCE =</span>
+          <span className="text-[11px] font-mono font-semibold text-gray-700 dark:text-gray-200">
+            {SCE.toFixed(3)}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="text-[11px] text-gray-500 dark:text-gray-400">Résidu normé max =</span>
+          <span className={`text-[11px] font-mono font-semibold ${maxNormed > 2 ? "text-red-600 dark:text-red-400" : "text-gray-700 dark:text-gray-200"}`}>
+            {maxNormed.toFixed(2)}
+            {maxNormed > 2 && " ⚠ point aberrant potentiel"}
+          </span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <span className="inline-block w-3 h-3 rounded-full bg-red-400" />
+          <span className="text-[11px] text-gray-400">|normé| &gt; 2</span>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -1889,15 +2024,11 @@ export default function PlanFactoriel() {
   const [validationHelpFit, setValidationHelpFit] = useState(null); // { fit, modelName }
   const [improvementHelpFit, setImprovementHelpFit] = useState(null); // { fit, verdict, modelName, modelTerms }
 
-  const loadExample = async (ex) => {
+  const loadExample = (ex) => {
     setLoadError(null);
     try {
-      // Exemples importés : données déjà embarquées dans _data
-      const data = ex._data ? ex._data : await fetch(ex.url).then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status} — ${ex.url}`);
-        return r.json();
-      });
-      const { factors: f, responses: r, centerPoint: cp, modelDefault: md, matrix: m } = loadExampleData(data);
+      if (!ex._data) throw new Error("Données manquantes pour cet exemple.");
+      const { factors: f, responses: r, centerPoint: cp, modelDefault: md, matrix: m } = loadExampleData(ex._data);
       setFactors(f);
       setResponses(r);
       setCenterPoint(cp);
@@ -1906,6 +2037,7 @@ export default function PlanFactoriel() {
       setActiveModelId(1);
       setMatrix(m);
       setLoadedExampleId(ex.file);
+      setPart(1);
     } catch (e) {
       console.error("Erreur chargement exemple:", e);
       setLoadError(e.message);
@@ -2477,79 +2609,81 @@ export default function PlanFactoriel() {
             );
           })}
 
-          {/* ── Popup de prévisualisation ── */}
-          {examplePopup && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60"
-              onClick={() => setExamplePopup(null)}
-            >
-              <div
-                className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl overflow-hidden"
-                onClick={e => e.stopPropagation()}
+        </div>
+      )}
+
+      {/* ── Popup de prévisualisation exemple ── */}
+      {examplePopup && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60"
+          onClick={() => setExamplePopup(null)}
+        >
+          <div
+            className="w-full max-w-sm rounded-2xl bg-white dark:bg-gray-900 shadow-2xl overflow-hidden"
+            onClick={e => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${
+                    diffBadgeCls[examplePopup.difficulty] || diffBadgeCls["débutant"]
+                  }`}>
+                    {examplePopup.difficulty}
+                  </span>
+                  {examplePopup.real_data && (
+                    <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-full px-1.5 py-0.5">
+                      données réelles
+                    </span>
+                  )}
+                </div>
+                <h2 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
+                  {examplePopup.title}
+                </h2>
+              </div>
+              <button
+                onClick={() => setExamplePopup(null)}
+                className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
               >
-                {/* Header */}
-                <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${
-                        diffBadgeCls[examplePopup.difficulty] || diffBadgeCls["débutant"]
-                      }`}>
-                        {examplePopup.difficulty}
-                      </span>
-                      {examplePopup.real_data && (
-                        <span className="text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-full px-1.5 py-0.5">
-                          données réelles
-                        </span>
-                      )}
-                    </div>
-                    <h2 className="text-sm font-bold text-gray-900 dark:text-white leading-tight">
-                      {examplePopup.title}
-                    </h2>
-                  </div>
-                  <button
-                    onClick={() => setExamplePopup(null)}
-                    className="rounded-lg p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors shrink-0"
-                  >
-                    <XMarkIcon className="size-5" />
-                  </button>
-                </div>
+                <XMarkIcon className="size-5" />
+              </button>
+            </div>
 
-                {/* Corps */}
-                <div className="px-5 pb-5 space-y-3">
-                  {/* Contexte */}
-                  <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
-                    {examplePopup.context}
-                  </p>
+            {/* Corps */}
+            <div className="px-5 pb-5 space-y-3">
+              {/* Contexte */}
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">
+                {examplePopup.context}
+              </p>
 
-                  {/* Séparateur */}
-                  <div className="h-px bg-gray-100 dark:bg-gray-800" />
+              {/* Séparateur */}
+              <div className="h-px bg-gray-100 dark:bg-gray-800" />
 
-                  {/* Boutons */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => setExamplePopup(null)}
-                      className="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
-                    >
-                      Annuler
-                    </button>
-                    <button
-                      onClick={() => {
-                        setExamplePopup(null);
-                        loadExample(examplePopup);
-                      }}
-                      className="flex-1 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors flex items-center justify-center gap-1.5"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="size-3.5">
-                        <path d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z" />
-                        <path d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z" />
-                      </svg>
-                      Charger
-                    </button>
-                  </div>
-                </div>
+              {/* Boutons */}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setExamplePopup(null)}
+                  className="flex-1 rounded-xl border border-gray-200 dark:border-gray-700 px-3 py-2 text-xs font-medium text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                >
+                  Annuler
+                </button>
+                <button
+                  onClick={() => {
+                    const ex = examplePopup;
+                    setExamplePopup(null);
+                    loadExample(ex);
+                  }}
+                  className="flex-1 rounded-xl bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors flex items-center justify-center gap-1.5"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="size-3.5">
+                    <path d="M8.75 2.75a.75.75 0 0 0-1.5 0v5.69L5.03 6.22a.75.75 0 0 0-1.06 1.06l3.5 3.5a.75.75 0 0 0 1.06 0l3.5-3.5a.75.75 0 0 0-1.06-1.06L8.75 8.44V2.75Z" />
+                    <path d="M3.5 9.75a.75.75 0 0 0-1.5 0v1.5A2.75 2.75 0 0 0 4.75 14h6.5A2.75 2.75 0 0 0 14 11.25v-1.5a.75.75 0 0 0-1.5 0v1.5c0 .69-.56 1.25-1.25 1.25h-6.5c-.69 0-1.25-.56-1.25-1.25v-1.5Z" />
+                  </svg>
+                  Charger
+                </button>
               </div>
             </div>
-          )}
+          </div>
         </div>
       )}
 
@@ -3455,7 +3589,6 @@ export default function PlanFactoriel() {
                       <p className="text-sm text-red-500">Calcul impossible — pas assez de points actifs ({validRows.length}) pour {m.terms.length + 1} paramètres.</p>
                     </div>
                   );
-                  const maxResid = Math.max(...fit.residuals.map(Math.abs), 1e-10);
                   const minRequired = Math.max(...models.map(x => x.terms.length)) + 2;
                   return (
                     <div key={m.id} className={`bg-white dark:bg-gray-900 border-2 ${col.border} rounded-xl p-5`}>
@@ -3464,77 +3597,19 @@ export default function PlanFactoriel() {
                         <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{m.name}</h3>
                         <span className="ml-auto text-xs text-gray-400">{activeRows.length} points actifs</span>
                       </div>
-                      {/* Tableau résidus avec scroll et 6 lignes visibles */}
-                      <div className="overflow-x-auto mb-4">
-                        <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
-                          <thead>
-                            <tr className="border-b border-gray-100 dark:border-gray-800">
-                              <th className="text-center text-[11px] font-medium text-gray-400 pb-2 px-2 w-8">✕</th>
-                              <th className="text-left text-[11px] font-medium text-gray-400 pb-2 px-2 w-8">#</th>
-                              <th className="text-right text-[11px] font-medium text-gray-400 pb-2 px-2">Y mesuré</th>
-                              <th className="text-right text-[11px] font-medium text-gray-400 pb-2 px-2">Ŷ calculé</th>
-                              <th className="text-right text-[11px] font-medium text-gray-400 pb-2 px-2">Résidu</th>
-                              <th className="text-right text-[11px] font-medium text-gray-400 pb-2 px-2">Normé</th>
-                              <th className="px-2 pb-2 text-[11px] font-medium text-gray-400">Barre</th>
-                            </tr>
-                          </thead>
-                        </table>
-                        {/* Corps scrollable */}
-                        <div className="overflow-y-auto" style={{ maxHeight: "calc(6 * 32px)" }}>
-                          <table className="w-full text-xs" style={{ tableLayout: "fixed" }}>
-                            <tbody>
-                              {allValidRows.map(({ row, i: globalIdx }, rowIdx) => {
-                                const isExcluded = excludedPoints.has(globalIdx);
-                                // Find position in activeRows for fit data
-                                const activeIdx = activeRows.findIndex(x => x.i === globalIdx);
-                                const resid = !isExcluded && activeIdx >= 0 ? fit.residuals[activeIdx] : null;
-                                const yHatVal = !isExcluded && activeIdx >= 0 ? fit.yHat[activeIdx] : null;
-                                const normed = resid !== null && fit.MSE > 0 ? resid / Math.sqrt(fit.MSE) : null;
-                                const barPct = resid !== null && maxResid > 0 ? Math.abs(resid) / maxResid * 100 : 0;
-                                const isLarge = normed !== null && Math.abs(normed) > 2;
-                                // Can we exclude this point?
-                                const canExclude = !isExcluded && (allValidRows.length - excludedPoints.size - 1) >= minRequired;
-                                return (
-                                  <tr key={globalIdx}
-                                    className={`border-b border-gray-50 dark:border-gray-800/50 last:border-0 transition-colors
-                                      ${isExcluded ? "bg-gray-100 dark:bg-gray-800 opacity-50" : isLarge ? "bg-red-50/40 dark:bg-red-900/10" : ""}`}>
-                                    {/* Checkbox exclusion */}
-                                    <td className="px-2 py-1.5 text-center w-8">
-                                      <input type="checkbox" checked={isExcluded}
-                                        disabled={!isExcluded && !canExclude}
-                                        onChange={() => toggleExclude(globalIdx, Math.max(...models.map(x => x.terms.length)))}
-                                        className="size-3 rounded border-gray-300 text-red-500 focus:ring-red-400 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                                        title={!isExcluded && !canExclude ? "Pas assez de points restants" : isExcluded ? "Réinclure ce point" : "Exclure ce point"}
-                                      />
-                                    </td>
-                                    <td className={`px-2 py-1.5 w-8 ${isExcluded ? "text-gray-300 dark:text-gray-600" : "text-gray-400"}`}>{globalIdx + 1}</td>
-                                    <td className={`px-2 py-1.5 text-right font-mono ${isExcluded ? "text-gray-300 dark:text-gray-600 line-through" : "text-gray-700 dark:text-gray-200"}`}>{fmt(allValidRows[rowIdx].y, 3)}</td>
-                                    <td className={`px-2 py-1.5 text-right font-mono ${isExcluded ? "text-gray-300 dark:text-gray-600" : "text-gray-700 dark:text-gray-200"}`}>{yHatVal !== null ? fmt(yHatVal, 3) : "—"}</td>
-                                    <td className={`px-2 py-1.5 text-right font-mono font-semibold ${isExcluded ? "text-gray-300 dark:text-gray-600" : resid !== null && resid >= 0 ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>
-                                      {resid !== null ? fmt(resid, 3) : "—"}
-                                    </td>
-                                    <td className={`px-2 py-1.5 text-right font-mono ${isExcluded ? "text-gray-300" : isLarge ? "text-red-600 font-bold" : "text-gray-500"}`}>
-                                      {normed !== null ? fmt(normed, 2) : "—"}
-                                    </td>
-                                    <td className="px-2 py-1.5">
-                                      {!isExcluded && resid !== null && (
-                                        <div className="h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden w-24">
-                                          <div className={`h-full rounded-full ${resid >= 0 ? "bg-emerald-400" : "bg-red-400"}`}
-                                            style={{ width: `${barPct}%`, marginLeft: resid < 0 ? `${100 - barPct}%` : "0" }} />
-                                        </div>
-                                      )}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-                        </div>
-                      </div>
-                      {/* Diagramme résidus vs Ŷ */}
-                      <div className="mt-4">
+                      {/* Diagramme résidus vs Ŷ — agrandi, interactif, sans tableau */}
+                      <div className="mt-2 relative">
                         <p className="text-[11px] font-semibold uppercase tracking-widest text-gray-400 mb-3">Résidus vs Ŷ</p>
-                        <ResidualPlot yHat={fit.yHat} residuals={fit.residuals} color={col.dot} />
+                        <ResidualPlot
+                          yHat={fit.yHat}
+                          residuals={fit.residuals}
+                          MSE={fit.MSE}
+                          globalIndices={activeRows.map(x => x.i)}
+                          excludedPoints={excludedPoints}
+                          onExclude={(gIdx) => toggleExclude(gIdx, Math.max(...models.map(x => x.terms.length)))}
+                          canExclude={(allValidRows.length - excludedPoints.size - 1) >= minRequired}
+                          color={col.dot}
+                        />
                       </div>
 
                       {/* ── Q-Q Plot (normalité) ── */}
