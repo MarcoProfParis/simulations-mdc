@@ -101,13 +101,36 @@ export default function Surface3D({ model, fit, factors, col, response }) {
     gridRef.current = { grid, zMin, zR, GRID, rotX, rotY, zoom, panX, panY, W, H };
     const toW=(i,j)=>({x:-1+2*i/GRID, y:-((grid[i][j]-zMin)/zR-0.5), z:-1+2*j/GRID});
 
-    // Grilles 3 plans
+    // Grilles des 3 plans
+    // Le plan sol (XZ) couvre X∈[−1,+1] et Z∈[−1,+1] → largeur 2
+    // Les murs (XY et YZ) doivent avoir la même hauteur effective :
+    // Y va de +0.5 (bas, valeur min) à −0.5 (haut, valeur max) → hauteur 1
+    // Pour que les cases soient carrées, on double les subdivisions verticales des murs
     ctx.strokeStyle="rgba(160,170,200,0.35)"; ctx.lineWidth=0.7;
+
+    // Plan sol (XZ) à y = +0.5 — N subdivisions, cases carrées
     for(let k=0;k<=N;k++){
       const t=-1+2*k/N;
-      gl(t,0.5,-1,t,0.5,1); gl(-1,0.5,t,1,0.5,t);
-      gl(t,0.5,-1,t,-0.5,-1); gl(-1,-(t*0.5),-1,1,-(t*0.5),-1);
-      gl(-1,0.5,t,-1,-0.5,t); gl(-1,-(t*0.5),-1,-1,-(t*0.5),1);
+      gl(t, 0.5,-1, t, 0.5, 1);   // lignes || Z
+      gl(-1,0.5, t, 1, 0.5, t);   // lignes || X
+    }
+
+    // Plan mur arrière (XY) à z = −1
+    // X ∈ [−1,+1] → N subdivisions · Y ∈ [+0.5,−0.5] → N/2 subdivisions (cases carrées)
+    for(let k=0;k<=N;k++){
+      const t=-1+2*k/N;
+      gl(t, 0.5,-1, t,-0.5,-1);                  // lignes || Y (verticales)
+      const y = 0.5 - k/N;                        // Y de +0.5 à -0.5 en N pas
+      gl(-1, y,-1, 1, y,-1);                      // lignes || X (horizontales)
+    }
+
+    // Plan mur latéral (YZ) à x = −1
+    // Z ∈ [−1,+1] → N subdivisions · Y ∈ [+0.5,−0.5] → N/2 subdivisions (cases carrées)
+    for(let k=0;k<=N;k++){
+      const t=-1+2*k/N;
+      gl(-1, 0.5,t,-1,-0.5, t);                   // lignes || Y (verticales)
+      const y = 0.5 - k/N;                         // Y de +0.5 à -0.5 en N pas
+      gl(-1, y,-1,-1, y, 1);                       // lignes || Z (horizontales)
     }
 
     // Surface
