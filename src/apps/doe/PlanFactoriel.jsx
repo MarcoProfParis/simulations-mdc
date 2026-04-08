@@ -10,7 +10,6 @@ import {
 } from "@headlessui/react";
 import {
   ExclamationTriangleIcon,
-  Bars3Icon,
   XMarkIcon,
   PlusIcon,
   TrashIcon,
@@ -1882,11 +1881,9 @@ export default function PlanFactoriel() {
   const [showRandomDialog, setShowRandomDialog] = useState(false);
   const [showRandomDone, setShowRandomDone] = useState(false);
   const [showCubicDialog, setShowCubicDialog] = useState(false);
-  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [loadedExampleId, setLoadedExampleId] = useState(null);
   const [loadError, setLoadError] = useState(null);
   const [importError, setImportError] = useState(null);
-  const [importedExamples, setImportedExamples] = useState([]);
   const [editMode, setEditMode] = useState(false);
   const [editMeta, setEditMeta] = useState({ id: "", title: "", context: "", difficulty: "débutant", real_data: false, source: "" });
   const [validationHelpFit, setValidationHelpFit] = useState(null); // { fit, modelName }
@@ -1909,7 +1906,6 @@ export default function PlanFactoriel() {
       setActiveModelId(1);
       setMatrix(m);
       setLoadedExampleId(ex.file);
-      setSidebarOpen(false);
     } catch (e) {
       console.error("Erreur chargement exemple:", e);
       setLoadError(e.message);
@@ -1928,7 +1924,6 @@ export default function PlanFactoriel() {
     setLoadedExampleId(null);
     setEditMode(false);
     setEditMeta({ id: "", title: "", context: "", difficulty: "débutant", real_data: false, source: "" });
-    setSidebarOpen(false);
   };
 
   // ── édition exemple ──
@@ -1957,7 +1952,6 @@ export default function PlanFactoriel() {
         source: data.meta?.source || "",
       });
       setEditMode(true);
-      setSidebarOpen(false);
       setPart(1);
     } catch (e) {
       console.error("Erreur chargement exemple:", e);
@@ -1998,27 +1992,6 @@ export default function PlanFactoriel() {
           setImportError(errors.join(" · "));
           return;
         }
-        // Créer l'entrée exemple à partir des métadonnées
-        const newEx = {
-          file: file.name,
-          url: null,
-          title: data.meta?.title || file.name.replace(".json", ""),
-          context: data.meta?.context || `${data.factors.length} facteurs`,
-          difficulty: data.meta?.difficulty || "débutant",
-          real_data: data.meta?.real_data ?? false,
-          _data: data, // données embarquées directement
-          imported: true,
-        };
-        // Éviter les doublons (même nom de fichier)
-        setImportedExamples(prev => {
-          const exists = prev.findIndex(e => e.file === file.name);
-          if (exists >= 0) {
-            const updated = [...prev];
-            updated[exists] = newEx;
-            return updated;
-          }
-          return [...prev, newEx];
-        });
         // Charger directement comme un exemple normal
         const { factors: f, responses: r, centerPoint: cp, modelDefault: md, matrix: m } = loadExampleData(data);
         setFactors(f);
@@ -2029,7 +2002,6 @@ export default function PlanFactoriel() {
         setActiveModelId(1);
         setMatrix(m);
         setLoadedExampleId(file.name);
-        setSidebarOpen(false);
         setPart(1);
       } catch (err) {
         setImportError("JSON invalide : " + err.message);
@@ -2280,156 +2252,6 @@ export default function PlanFactoriel() {
     />
     <div className="max-w-4xl mx-auto px-4 py-6">
 
-      {/* ── BARRE LATÉRALE ── */}
-      {part === 1 && (
-        <Dialog open={sidebarOpen} onClose={setSidebarOpen} className="relative z-50">
-          <DialogBackdrop
-            transition
-            className="fixed inset-0 bg-gray-900/50 transition-opacity duration-300 ease-in-out data-closed:opacity-0"
-          />
-          <div className="fixed inset-0 overflow-hidden">
-            <div className="absolute inset-0 overflow-hidden">
-              <div className="pointer-events-none fixed inset-y-0 left-0 flex max-w-full pr-10">
-                <DialogPanel
-                  transition
-                  className="pointer-events-auto w-72 transform transition duration-300 ease-in-out data-closed:-translate-x-full"
-                >
-                  <div className="flex h-full flex-col bg-white dark:bg-gray-900 shadow-xl overflow-y-auto">
-                    <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200 dark:border-gray-700">
-                      <DialogTitle className="flex items-center gap-2 text-sm font-semibold text-gray-900 dark:text-white">
-                        <BookOpenIcon className="size-4" />
-                        Exemples &amp; nouveau plan
-                      </DialogTitle>
-                      <button onClick={() => setSidebarOpen(false)} className="rounded-md p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
-                        <XMarkIcon className="size-5" />
-                      </button>
-                    </div>
-
-                    {/* Import JSON */}
-                    <div className="px-4 pt-4 pb-0">
-                      <label className="w-full flex items-center justify-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 px-4 py-2.5 text-sm font-medium text-gray-600 dark:text-gray-300 hover:border-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 transition-colors cursor-pointer">
-                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-4 rotate-180">
-                          <path fillRule="evenodd" d="M10 3a1 1 0 01.707.293l3 3a1 1 0 01-1.414 1.414L11 6.414V12a1 1 0 11-2 0V6.414L7.707 7.707a1 1 0 01-1.414-1.414l3-3A1 1 0 0110 3zm-3.707 9.293a1 1 0 011.414 1.414L10 16.414l2.293-2.293a1 1 0 011.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                        </svg>
-                        Importer un JSON
-                        <input
-                          type="file"
-                          accept=".json"
-                          className="sr-only"
-                          onChange={e => { validateAndImport(e.target.files[0]); e.target.value = ""; }}
-                        />
-                      </label>
-                      {importError && (
-                        <div className="mt-2 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 px-3 py-2">
-                          <p className="text-xs font-medium text-red-600 dark:text-red-400 mb-0.5">Format invalide</p>
-                          <p className="text-[11px] text-red-500 dark:text-red-400 leading-relaxed">{importError}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="px-4 pt-4 pb-2">
-                      <button onClick={resetToNew}
-                        className="w-full flex items-center justify-center gap-2 rounded-lg border-2 border-dashed border-gray-300 dark:border-gray-600 px-4 py-3 text-sm font-medium text-gray-600 dark:text-gray-300 hover:border-gray-400 hover:text-gray-800 dark:hover:text-white transition-colors">
-                        <PlusIcon className="size-4" />
-                        Nouveau plan vide
-                      </button>
-                    </div>
-
-                    <div className="px-4 py-3">
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500 mb-3">Exemples</p>
-                      <div className="flex flex-col gap-2">
-                        {EXAMPLE_FILES.map((ex) => (
-                          <div key={ex.file} className={`rounded-lg border transition-all ${
-                              loadedExampleId === ex.file
-                                ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-400"
-                                : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-500"
-                            }`}>
-                            <button onClick={() => loadExample(ex)} className="w-full text-left px-3 pt-2.5 pb-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-lg transition-colors">
-                              <div className="flex items-start justify-between gap-2 mb-1">
-                                <span className="text-xs font-medium text-gray-900 dark:text-white leading-tight">{ex.title}</span>
-                                {ex.real_data && (
-                                  <span className="shrink-0 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-full px-1.5 py-0.5">réel</span>
-                                )}
-                              </div>
-                              <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1.5">{ex.context}</p>
-                              <span className={`inline-block text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${diffBadgeCls[ex.difficulty] || diffBadgeCls["débutant"]}`}>
-                                {ex.difficulty}
-                              </span>
-                            </button>
-                            <div className="border-t border-gray-100 dark:border-gray-700 px-3 py-1.5 flex justify-end">
-                              <button onClick={() => loadForEdit(ex)}
-                                className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
-                                title="Éditer cet exemple">
-                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
-                                  <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
-                                </svg>
-                                Éditer
-                              </button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    {loadError && (
-                      <div className="mx-4 mt-2 mb-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 px-3 py-2">
-                        <p className="text-xs text-red-600 dark:text-red-400 font-medium mb-0.5">Erreur de chargement</p>
-                        <p className="text-[11px] text-red-500 dark:text-red-400 break-all">{loadError}</p>
-                      </div>
-                    )}
-                    </div>
-
-                    {/* Exemples importés */}
-                    {importedExamples.length > 0 && (
-                      <div className="px-4 py-3 border-t border-gray-100 dark:border-gray-800">
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] font-semibold uppercase tracking-widest text-indigo-400 dark:text-indigo-500">Importés</p>
-                          <button onClick={() => setImportedExamples([])}
-                            className="text-[10px] text-gray-400 hover:text-red-500 transition-colors">
-                            Tout supprimer
-                          </button>
-                        </div>
-                        <div className="flex flex-col gap-2">
-                          {importedExamples.map((ex) => (
-                            <div key={ex.file} className={`rounded-lg border transition-all ${
-                              loadedExampleId === ex.file
-                                ? "border-indigo-500 bg-indigo-50 dark:bg-indigo-900/30 dark:border-indigo-400"
-                                : "border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-500"
-                            }`}>
-                              <button onClick={() => loadExample(ex)} className="w-full text-left px-3 pt-2.5 pb-2 hover:bg-gray-50 dark:hover:bg-gray-800 rounded-t-lg transition-colors">
-                                <div className="flex items-start justify-between gap-2 mb-1">
-                                  <span className="text-xs font-medium text-gray-900 dark:text-white leading-tight">{ex.title}</span>
-                                  <span className="shrink-0 text-[10px] font-semibold bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300 rounded-full px-1.5 py-0.5">importé</span>
-                                </div>
-                                <p className="text-[11px] text-gray-500 dark:text-gray-400 mb-1.5">{ex.context}</p>
-                                <span className={`inline-block text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${diffBadgeCls[ex.difficulty] || diffBadgeCls["débutant"]}`}>
-                                  {ex.difficulty}
-                                </span>
-                              </button>
-                              <div className="border-t border-gray-100 dark:border-gray-700 px-3 py-1.5 flex justify-between items-center">
-                                <button onClick={() => setImportedExamples(prev => prev.filter(e => e.file !== ex.file))}
-                                  className="text-[11px] text-red-400 hover:text-red-600 transition-colors">
-                                  Supprimer
-                                </button>
-                                <button onClick={() => loadForEdit(ex)}
-                                  className="flex items-center gap-1 text-[11px] text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors">
-                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="size-3.5">
-                                    <path d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.885L17.5 5.5a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z" />
-                                  </svg>
-                                  Éditer
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </DialogPanel>
-              </div>
-            </div>
-          </div>
-        </Dialog>
-      )}
-
       {/* ── STEPPER ── */}
       {part > 0 && (
       <nav aria-label="Progression" className="mb-6">
@@ -2549,7 +2371,7 @@ export default function PlanFactoriel() {
 
             {/* Carte 3 : Exemples */}
             <button
-              onClick={() => setSidebarOpen(true)}
+              onClick={() => setPart(0)}
               className="flex flex-col items-center gap-3 rounded-2xl border-2 border-dashed border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-900 p-6 text-center hover:border-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/10 transition-all group"
             >
               <div className="rounded-full bg-amber-100 dark:bg-amber-900/30 p-3 group-hover:bg-amber-200 dark:group-hover:bg-amber-900/50 transition-colors">
@@ -2758,16 +2580,6 @@ export default function PlanFactoriel() {
               </div>
             </div>
           )}
-
-          <div className="flex items-center justify-between mb-4">
-            <button onClick={() => setSidebarOpen(true)}
-              className="flex items-center gap-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors shadow-sm">
-              <Bars3Icon className="size-4" />
-              {loadedExampleId
-                ? <span>Exemple chargé : <span className="font-medium">{EXAMPLE_FILES.find(e => e.file === loadedExampleId)?.title}</span></span>
-                : "Charger un exemple / Nouveau plan"}
-            </button>
-          </div>
 
           {/* Section métadonnées — visible uniquement en mode édition */}
           {editMode && (
