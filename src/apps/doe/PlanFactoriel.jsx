@@ -24,6 +24,30 @@ import EffetsPanel from "./EffetsPanel";
 
 // ─── utilitaires ──────────────────────────────────────────────────────────────
 
+const EXAMPLE_GROUPS = [
+  {
+    id: "reel",
+    label: "Données réelles",
+    emoji: "🧪",
+    color: "amber",
+    files: ["ex_lineaire.json", "ex_synergie.json", "ex_quadratique.json"],
+  },
+  {
+    id: "exercice",
+    label: "Exercices",
+    emoji: "📐",
+    color: "indigo",
+    files: ["ex_extraction.json", "ex_revetement.json"],
+  },
+  {
+    id: "optim",
+    label: "Optimisation",
+    emoji: "🎯",
+    color: "emerald",
+    files: ["ex_optimisation_reaction.json", "ex_optimisation_avance.json"],
+  },
+];
+
 const DEFAULT_FACTORS = [
   { id: "X1", name: "Facteur 1", unit: "", continuous: true, low: { real: 0, coded: -1 }, high: { real: 1, coded: 1 } },
   { id: "X2", name: "Facteur 2", unit: "", continuous: true, low: { real: 0, coded: -1 }, high: { real: 1, coded: 1 } },
@@ -2535,6 +2559,70 @@ export default function PlanFactoriel() {
                 <p className="text-xs text-gray-400 mt-0.5">Charger un exemple</p>
               </div>
             </button>
+          </div>
+
+          {/* ── Section exemples ── */}
+          <div className="w-full max-w-2xl space-y-6">
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+              <span className="text-xs font-semibold uppercase tracking-widest text-gray-400 dark:text-gray-500">
+                Exemples
+              </span>
+              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+            </div>
+
+            {EXAMPLE_GROUPS.map(group => {
+              const groupExamples = EXAMPLE_FILES.filter(ex => group.files.includes(ex.file));
+              const colorMap = {
+                amber:   { border: "border-amber-200 dark:border-amber-800",   header: "bg-amber-50 dark:bg-amber-900/20",   text: "text-amber-700 dark:text-amber-300",   badge: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" },
+                indigo:  { border: "border-indigo-200 dark:border-indigo-800",  header: "bg-indigo-50 dark:bg-indigo-900/20",  text: "text-indigo-700 dark:text-indigo-300",  badge: "bg-indigo-100 text-indigo-800 dark:bg-indigo-900/40 dark:text-indigo-300" },
+                emerald: { border: "border-emerald-200 dark:border-emerald-800", header: "bg-emerald-50 dark:bg-emerald-900/20", text: "text-emerald-700 dark:text-emerald-300", badge: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300" },
+              };
+              const c = colorMap[group.color];
+
+              return (
+                <div key={group.id} className={`rounded-2xl border ${c.border} overflow-hidden`}>
+                  {/* En-tête du groupe */}
+                  <div className={`px-4 py-2.5 ${c.header} flex items-center gap-2`}>
+                    <span className="text-base">{group.emoji}</span>
+                    <span className={`text-xs font-semibold ${c.text}`}>{group.label}</span>
+                  </div>
+
+                  {/* Grille de cartes */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-px bg-gray-100 dark:bg-gray-800">
+                    {groupExamples.map(ex => (
+                      <button
+                        key={ex.file}
+                        onClick={() => loadExample(ex)}
+                        className="flex flex-col gap-1.5 text-left p-4 bg-white dark:bg-gray-900 hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group"
+                      >
+                        {/* Titre + badge réel */}
+                        <div className="flex items-start justify-between gap-2">
+                          <span className="text-xs font-semibold text-gray-800 dark:text-white leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                            {ex.title}
+                          </span>
+                          {ex.real_data && (
+                            <span className="shrink-0 text-[10px] font-semibold bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300 rounded-full px-1.5 py-0.5">
+                              réel
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Contexte */}
+                        <p className="text-[11px] text-gray-500 dark:text-gray-400 leading-snug">
+                          {ex.context}
+                        </p>
+
+                        {/* Badge difficulté */}
+                        <span className={`self-start text-[10px] font-semibold rounded-full px-1.5 py-0.5 ${diffBadgeCls[ex.difficulty] || diffBadgeCls["débutant"]}`}>
+                          {ex.difficulty}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
